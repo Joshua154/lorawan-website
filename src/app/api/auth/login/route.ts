@@ -1,10 +1,23 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 import { authenticateUser, createSession } from "@/server/auth";
+import { ensureJsonRequest, ensureTrustedOrigin } from "@/server/request-security";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  const originError = ensureTrustedOrigin(request);
+
+  if (originError) {
+    return originError;
+  }
+
+  const jsonError = ensureJsonRequest(request);
+
+  if (jsonError) {
+    return jsonError;
+  }
+
   const payload = (await request.json()) as { username?: string; password?: string };
   const username = payload.username?.trim() ?? "";
   const password = payload.password ?? "";

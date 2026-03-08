@@ -1,12 +1,25 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 import type { PingFeature } from "@/lib/types";
 import { getCurrentUser } from "@/server/auth";
 import { uploadManualPings } from "@/server/ping-service";
+import { ensureJsonRequest, ensureTrustedOrigin } from "@/server/request-security";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  const originError = ensureTrustedOrigin(request);
+
+  if (originError) {
+    return originError;
+  }
+
+  const jsonError = ensureJsonRequest(request);
+
+  if (jsonError) {
+    return jsonError;
+  }
+
   const user = await getCurrentUser();
 
   if (!user) {
