@@ -47,3 +47,23 @@ export type UpdateResult = {
   features?: PingFeature[];
   message?: string;
 };
+
+export type UserRole = "admin" | "user";
+
+export type SessionUser = {
+  id: number;
+  username: string;
+  role: UserRole;
+  assignedBoardIds: string[];
+};
+
+export type ManagedUser = SessionUser & {
+  createdAt: string;
+};
+
+export type CreateUserPayload = {
+  username: string;
+  password: string;
+  role: UserRole;
+  assignedBoardIds: string[];
+};

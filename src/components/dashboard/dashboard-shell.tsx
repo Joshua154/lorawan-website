@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { AUTO_REFRESH_SECONDS, DEFAULT_HEX_MIN_POINTS, DEFAULT_HEX_SIZE, EMPTY_COLLECTION, buildFeatureKey, formatTimestamp, getSignalCategory, getStabilityCategory, isValidCoordinate, summarizeCollection, sortFeatures } from "@/lib/pings";
@@ -8,6 +10,7 @@ import type {
   PingFeature,
   PingFeatureCollection,
   PingSummary,
+  SessionUser,
   SignalCategory,
   StabilityCategory,
   ViewMode,
@@ -26,11 +29,17 @@ type RangeState = {
   end: number;
 };
 
+type DashboardShellProps = {
+  viewer: SessionUser;
+};
+
 const PLAYBACK_SPEEDS = [1, 5, 10, 20, 50] as const;
 const DEFAULT_SIGNAL_CATEGORIES: SignalCategory[] = ["good", "medium", "bad", "deadzone"];
 const DEFAULT_STABILITY_CATEGORIES: StabilityCategory[] = ["0", "unregular", "good", "stable"];
 
-export function DashboardShell() {
+export function DashboardShell({ viewer }: DashboardShellProps) {
+  const router = useRouter();
+  const isAdmin = viewer.role === "admin";
   const [collection, setCollection] = useState<PingFeatureCollection>(EMPTY_COLLECTION);
   const [summary, setSummary] = useState<PingSummary>(summarizeCollection(EMPTY_COLLECTION));
   const [mode, setMode] = useState<ViewMode>("markers");
@@ -119,8 +128,19 @@ export function DashboardShell() {
     return options.filter((option) => previousSet.has(option) || !known.includes(option));
   }, []);
 
+  const redirectToLogin = useCallback(() => {
+    router.push("/login");
+    router.refresh();
+  }, [router]);
+
   const fetchDataset = useCallback(async (checkForNew = false) => {
     const response = await fetch("/api/pings", { cache: "no-store" });
+
+    if (response.status === 401) {
+      redirectToLogin();
+      return;
+    }
+
     const data = (await response.json()) as DatasetResponse;
     const nextSortedFeatures = sortFeatures(data.collection.features).filter((feature) =>
       isValidCoordinate(feature.geometry.coordinates),
@@ -148,7 +168,7 @@ export function DashboardShell() {
         end: wasAtEnd ? newMaxIndex : Math.min(currentRange.end, newMaxIndex),
       };
     });
-  }, []);
+  }, [redirectToLogin]);
 
   useEffect(() => {
     void fetchDataset();
@@ -196,12 +216,28 @@ export function DashboardShell() {
 
     try {
       const response = await fetch("/api/pings/update", { method: "POST" });
-      const result = (await response.json()) as { status: string; total: number; added: number; updated: number; message?: string };
+      const result = (await response.json()) as {
+        status?: string;
+        total?: number;
+        added?: number;
+        updated?: number;
+        message?: string;
+      };
+
+      if (response.status === 401) {
+        redirectToLogin();
+        return;
+      }
+
+      if (response.status === 403) {
+        setStatusMessage(result.message ?? "❌ Keine Berechtigung für Updates");
+        return;
+      }
 
       if (result.status === "ok" || result.status === "cached") {
         await fetchDataset(true);
-        if (result.added > 0 || result.updated > 0) {
-          setStatusMessage(`✅ ${result.added} neu, ${result.updated} aktualisiert`);
+        if ((result.added ?? 0) > 0 || (result.updated ?? 0) > 0) {
+          setStatusMessage(`✅ ${result.added ?? 0} neu, ${result.updated ?? 0} aktualisiert`);
         } else {
           setStatusMessage("🟡 Keine neuen Punkte");
         }
@@ -215,7 +251,7 @@ export function DashboardShell() {
       setIsUpdating(false);
       window.setTimeout(() => setStatusMessage("Bereit"), 5_000);
     }
-  }, [fetchDataset, isUpdating]);
+  }, [fetchDataset, isUpdating, redirectToLogin]);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -278,6 +314,11 @@ export function DashboardShell() {
       setRange((currentRange) => ({ ...currentRange, end: currentRange.start }));
     }
     setIsPlaying((currentValue) => !currentValue);
+  };
+
+  const handleLogout = async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    redirectToLogin();
   };
 
   const readFromBoard = async () => {
@@ -413,8 +454,14 @@ export function DashboardShell() {
       body: JSON.stringify(extractedPings),
     });
 
+    if (response.status === 401) {
+      redirectToLogin();
+      return;
+    }
+
     if (!response.ok) {
-      throw new Error("Upload fehlgeschlagen");
+      const result = (await response.json()) as { message?: string };
+      throw new Error(result.message ?? "Upload fehlgeschlagen");
     }
 
     const result = (await response.json()) as { added: number; updated: number };
@@ -440,6 +487,7 @@ export function DashboardShell() {
     <main className="dashboard-shell">
       <ControlPanel
         boardCounts={boardCounts}
+        canImport={isAdmin}
         calculationMode={calculationMode}
         countdown={countdown}
         followedBoardId={followedBoardId}
@@ -473,6 +521,11 @@ export function DashboardShell() {
           <div>
             <p className="eyebrow">Datensatz</p>
             <h2>{summary.validFeatures.toLocaleString("de-DE")} sichtbare Pings</h2>
+            <p className="map-subtitle">
+              {isAdmin
+                ? `Administrator ${viewer.username} · Alle Boards sichtbar`
+                : `${viewer.username} · ${viewer.assignedBoardIds.length} freigeschaltete Boards`}
+            </p>
           </div>
           <div className="summary-grid">
             <article>
@@ -487,6 +540,21 @@ export function DashboardShell() {
               <span>Letzter Ping</span>
               <strong>{formatTimestamp(summary.latestTimestamp)}</strong>
             </article>
+          </div>
+          <div className="viewer-actions">
+            <span className={`role-badge ${isAdmin ? "admin" : "user"}`}>
+              {isAdmin ? "Admin" : "User"}
+            </span>
+            <div className="viewer-links">
+              {isAdmin ? (
+                <Link className="secondary-button nav-link-button" href="/admin">
+                  Adminbereich
+                </Link>
+              ) : null}
+              <button className="secondary-button" onClick={() => void handleLogout()} type="button">
+                Abmelden
+              </button>
+            </div>
           </div>
         </div>
 

@@ -97,6 +97,18 @@ export function buildFeatureKey(feature: PingFeature): string {
   ].join(":");
 }
 
+export function filterCollectionByBoards(
+  collection: PingFeatureCollection,
+  allowedBoardIds: string[],
+): PingFeatureCollection {
+  const allowedBoards = new Set(allowedBoardIds.map(String));
+
+  return {
+    ...collection,
+    features: collection.features.filter((feature) => allowedBoards.has(String(feature.properties.boardID))),
+  };
+}
+
 export function summarizeCollection(collection: PingFeatureCollection): PingSummary {
   const boardCounts: Record<string, number> = {};
   const gatewayCounts: Record<string, number> = {};

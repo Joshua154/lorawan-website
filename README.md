@@ -1,36 +1,56 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+## LoRaWAN dashboard
 
-## Getting Started
+This project is a Next.js LoRaWAN GPS dashboard with:
 
-First, run the development server:
+- login/logout with database-backed sessions
+- admin accounts that can see all boards and create users
+- regular users that only see the boards assigned to them
+- the existing live ping map, filtering, and board import tools
+
+## Getting started
+
+Install dependencies and start the development server:
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+On first start, the app creates `data/lorawan-auth.db` automatically and seeds a default admin account:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- username: `admin`
+- password: `admin1234`
 
-## Learn More
+You can override that bootstrap account with environment variables before the first run:
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+export LORAWAN_ADMIN_USERNAME="your-admin-name"
+export LORAWAN_ADMIN_PASSWORD="your-secure-password"
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Permissions
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- `admin`: can view all boards, trigger dataset refreshes, import board dumps, and create new users
+- `user`: can log in and only see the boards assigned to that account
 
-## Deploy on Vercel
+## Data storage
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- auth data and sessions: `data/lorawan-auth.db`
+- LoRaWAN ping dataset: `data/pings.geojson`
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Verification
+
+Run the main checks with:
+
+```bash
+npm run lint
+npm run build
+```
+
+## Notes
+
+- The first admin account is only auto-created when the database has no admin users yet.
+- Admin-created user passwords are hashed with `bcryptjs`.
+- Regular users only receive filtered data from the `/api/pings` endpoints.

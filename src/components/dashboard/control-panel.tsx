@@ -3,6 +3,7 @@
 import type { CalculationMode, SignalCategory, StabilityCategory, ViewMode } from "@/lib/types";
 
 type ControlPanelProps = {
+  canImport: boolean;
   mode: ViewMode;
   calculationMode: CalculationMode;
   minHexPoints: number;
@@ -56,6 +57,7 @@ const HEX_SIZES = [
 const HEX_MIN_POINTS = [1, 5, 10, 25];
 
 export function ControlPanel({
+  canImport,
   mode,
   calculationMode,
   minHexPoints,
@@ -95,9 +97,11 @@ export function ControlPanel({
             <p className="eyebrow">LoRaWAN x Next.js</p>
             <h1>GPS Dashboard</h1>
           </div>
-          <button className="primary-button" onClick={onImportClick} type="button">
-            📥 Vom Board importieren
-          </button>
+          {canImport ? (
+            <button className="primary-button" onClick={onImportClick} type="button">
+              📥 Vom Board importieren
+            </button>
+          ) : null}
         </div>
 
         <div className="status-card">
