@@ -167,15 +167,17 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
     setNewFeatureKeys(nextNewFeatureKeys);
     latestTimestampRef.current = nextSortedFeatures.at(-1)?.properties.time ?? null;
 
+    const previousMaxIndex = previousMaxIndexRef.current;
+    
     setRange((currentRange) => {
-      const wasAtEnd = currentRange.end >= Math.max(previousMaxIndexRef.current - 1, 0) || !checkForNew;
-      previousMaxIndexRef.current = newMaxIndex;
-
+      const wasAtEnd = currentRange.end >= Math.max(previousMaxIndex - 1, 0) || !checkForNew;
       return {
         start: checkForNew ? Math.min(currentRange.start, newMaxIndex) : 0,
         end: wasAtEnd ? newMaxIndex : Math.min(currentRange.end, newMaxIndex),
       };
     });
+    
+    previousMaxIndexRef.current = newMaxIndex;
   }, [redirectToLogin]);
 
   useEffect(() => {
@@ -183,12 +185,14 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
   }, [fetchDataset]);
 
   useEffect(() => {
-    setSelectedBoards((previous) => mergeSelections(boardOptions, previous, knownBoardsRef.current));
+    const knownBoards = knownBoardsRef.current;
+    setSelectedBoards((previous) => mergeSelections(boardOptions, previous, knownBoards));
     knownBoardsRef.current = boardOptions;
   }, [boardOptions, mergeSelections]);
 
   useEffect(() => {
-    setSelectedGateways((previous) => mergeSelections(gatewayOptions, previous, knownGatewaysRef.current));
+    const knownGateways = knownGatewaysRef.current;
+    setSelectedGateways((previous) => mergeSelections(gatewayOptions, previous, knownGateways));
     knownGatewaysRef.current = gatewayOptions;
   }, [gatewayOptions, mergeSelections]);
 
