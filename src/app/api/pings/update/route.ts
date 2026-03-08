@@ -19,10 +19,6 @@ async function handleUpdate(request: NextRequest) {
     return NextResponse.json({ message: "Unauthorized." }, { status: 401 });
   }
 
-  if (user.role !== "admin") {
-    return NextResponse.json({ message: "Only admins can refresh the dataset." }, { status: 403 });
-  }
-
   const result = await runRemoteUpdate();
   const status = result.status === "error" ? 500 : 200;
   return NextResponse.json(result, { status });

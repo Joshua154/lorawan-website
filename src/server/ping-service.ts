@@ -23,6 +23,27 @@ const cacheState: CacheState = {
   lastUpdatedCount: 0,
 };
 
+export function getNextUpdateInSeconds(): number {
+  const nextUpdate = cacheState.lastLogUpdate + CACHE_DURATION_MS;
+  const remainingMs = Math.max(0, nextUpdate - Date.now());
+  return Math.ceil(remainingMs / 1000);
+}
+
+declare global {
+  var __pingPollingIntervalStarted: boolean | undefined;
+}
+
+if (!globalThis.__pingPollingIntervalStarted) {
+  globalThis.__pingPollingIntervalStarted = true;
+  setInterval(() => {
+    runRemoteUpdate().catch((error) => console.error("Background ping update failed:", error));
+  }, CACHE_DURATION_MS);
+  
+  setTimeout(() => {
+    runRemoteUpdate().catch((error) => console.error("Initial ping update failed:", error));
+  }, 1000);
+}
+
 async function ensureDataFile(): Promise<void> {
   await mkdir(APP_DATA_DIR, { recursive: true });
 

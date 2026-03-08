@@ -13,7 +13,7 @@ export const SIGNAL_COLORS: Record<SignalCategory, string> = {
   deadzone: "#111827",
 };
 
-export const AUTO_REFRESH_SECONDS = 45;
+export const AUTO_REFRESH_SECONDS = 59;
 export const DEFAULT_HEX_SIZE = 0.0008;
 export const DEFAULT_HEX_MIN_POINTS = 1;
 export const EMPTY_COLLECTION: PingFeatureCollection = {

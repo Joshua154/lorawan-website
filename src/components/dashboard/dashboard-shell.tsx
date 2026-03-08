@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AUTO_REFRESH_SECONDS, DEFAULT_HEX_MIN_POINTS, DEFAULT_HEX_SIZE, EMPTY_COLLECTION, buildFeatureKey, formatTimestamp, getSignalCategory, getStabilityCategory, isValidCoordinate, summarizeCollection, sortFeatures } from "@/lib/pings";
 import type {
   CalculationMode,
+  DatasetResponse,
   PingFeature,
   PingFeatureCollection,
   PingSummary,
@@ -18,11 +19,6 @@ import type {
 import { ControlPanel } from "@/components/dashboard/control-panel";
 import { TimelineControls } from "@/components/dashboard/timeline-controls";
 import { LoraWanMap } from "@/components/map/lorawan-map";
-
-type DatasetResponse = {
-  collection: PingFeatureCollection;
-  summary: PingSummary;
-};
 
 type RangeState = {
   start: number;
@@ -164,6 +160,7 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
 
     setCollection(data.collection);
     setSummary(data.summary);
+    setCountdown(data.nextUpdateInSeconds || AUTO_REFRESH_SECONDS);
     setNewFeatureKeys(nextNewFeatureKeys);
     latestTimestampRef.current = nextSortedFeatures.at(-1)?.properties.time ?? null;
 
@@ -222,46 +219,18 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
     }
 
     setIsUpdating(true);
-    setStatusMessage("Aktualisiere Daten…");
+    setStatusMessage("Lade Daten…");
 
     try {
-      const response = await fetch("/api/pings/update", { method: "POST" });
-      const result = (await response.json()) as {
-        status?: string;
-        total?: number;
-        added?: number;
-        updated?: number;
-        message?: string;
-      };
-
-      if (response.status === 401) {
-        redirectToLogin();
-        return;
-      }
-
-      if (response.status === 403) {
-        setStatusMessage(result.message ?? "❌ Keine Berechtigung für Updates");
-        return;
-      }
-
-      if (result.status === "ok" || result.status === "cached") {
-        await fetchDataset(true);
-        if ((result.added ?? 0) > 0 || (result.updated ?? 0) > 0) {
-          setStatusMessage(`✅ ${result.added ?? 0} neu, ${result.updated ?? 0} aktualisiert`);
-        } else {
-          setStatusMessage("🟡 Keine neuen Punkte");
-        }
-      } else {
-        setStatusMessage(result.message ?? "❌ Update fehlgeschlagen");
-      }
+      await fetchDataset(true);
+      setStatusMessage("✅ Aktuell");
     } catch {
       setStatusMessage("❌ Server nicht erreichbar");
     } finally {
-      setCountdown(AUTO_REFRESH_SECONDS);
       setIsUpdating(false);
       window.setTimeout(() => setStatusMessage("Bereit"), 5_000);
     }
-  }, [fetchDataset, isUpdating, redirectToLogin]);
+  }, [fetchDataset, isUpdating]);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -506,7 +475,8 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
     <main className="dashboard-shell">
       <ControlPanel
         boardCounts={boardCounts}
-        canImport={isAdmin}
+        // canImport={isAdmin}
+        canImport={true}
         calculationMode={calculationMode}
         countdown={countdown}
         followedBoardId={followedBoardId}

@@ -26,9 +26,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: "Unauthorized." }, { status: 401 });
   }
 
-  if (user.role !== "admin") {
-    return NextResponse.json({ message: "Only admins can import board dumps." }, { status: 403 });
-  }
+  // if (user.role !== "admin") {
+  //   return NextResponse.json({ message: "Only admins can import board dumps." }, { status: 403 });
+  // }
 
   const payload = (await request.json()) as PingFeature[];
   const result = await uploadManualPings(payload);

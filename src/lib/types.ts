@@ -67,3 +67,9 @@ export type CreateUserPayload = {
   role: UserRole;
   assignedBoardIds: string[];
 };
+
+export type DatasetResponse = {
+  collection: PingFeatureCollection;
+  summary: PingSummary;
+  nextUpdateInSeconds: number;
+};
