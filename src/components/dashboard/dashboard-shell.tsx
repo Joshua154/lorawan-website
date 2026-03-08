@@ -46,8 +46,8 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
   const [calculationMode, setCalculationMode] = useState<CalculationMode>("stabilized");
   const [selectedCategories, setSelectedCategories] = useState<SignalCategory[]>(DEFAULT_SIGNAL_CATEGORIES);
   const [selectedStability, setSelectedStability] = useState<StabilityCategory[]>(DEFAULT_STABILITY_CATEGORIES);
-  const [selectedBoards, setSelectedBoards] = useState<string[]>([]);
-  const [selectedGateways, setSelectedGateways] = useState<string[]>([]);
+  const [selectedBoards, setSelectedBoards] = useState<string[] | null>(null);
+  const [selectedGateways, setSelectedGateways] = useState<string[] | null>(null);
   const [hexSize, setHexSize] = useState(DEFAULT_HEX_SIZE);
   const [minHexPoints, setMinHexPoints] = useState(DEFAULT_HEX_MIN_POINTS);
   const [range, setRange] = useState<RangeState>({ start: 0, end: 0 });
@@ -75,6 +75,14 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
 
   const boardCounts = useMemo(() => summary.boardCounts, [summary.boardCounts]);
   const gatewayCounts = useMemo(() => summary.gatewayCounts, [summary.gatewayCounts]);
+  const boardOptions = useMemo(
+    () => Object.keys(boardCounts).sort((left, right) => Number(left) - Number(right)),
+    [boardCounts],
+  );
+  const gatewayOptions = useMemo(
+    () => Object.keys(gatewayCounts).sort((left, right) => left.localeCompare(right)),
+    [gatewayCounts],
+  );
 
   const rangedFeatures = useMemo(() => {
     if (sortedFeatures.length === 0) {
@@ -94,8 +102,8 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
       const stabilityCategory = getStabilityCategory(feature.properties.rssi_bonus);
 
       return (
-        selectedBoards.includes(String(feature.properties.boardID)) &&
-        selectedGateways.includes(gateway) &&
+        (selectedBoards === null || selectedBoards.includes(String(feature.properties.boardID))) &&
+        (selectedGateways === null || selectedGateways.includes(gateway)) &&
         selectedCategories.includes(category) &&
         selectedStability.includes(stabilityCategory)
       );
@@ -119,8 +127,8 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
     return `Von ${startLabel} bis ${endLabel}`;
   }, [range.end, range.start, sortedFeatures]);
 
-  const mergeSelections = useCallback((options: string[], previous: string[], known: string[]) => {
-    if (previous.length === 0 && known.length === 0) {
+  const mergeSelections = useCallback((options: string[], previous: string[] | null, known: string[]) => {
+    if (previous === null || (previous.length === 0 && known.length === 0)) {
       return options;
     }
 
@@ -175,16 +183,14 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
   }, [fetchDataset]);
 
   useEffect(() => {
-    const boardOptions = Object.keys(boardCounts).sort((left, right) => Number(left) - Number(right));
     setSelectedBoards((previous) => mergeSelections(boardOptions, previous, knownBoardsRef.current));
     knownBoardsRef.current = boardOptions;
-  }, [boardCounts, mergeSelections]);
+  }, [boardOptions, mergeSelections]);
 
   useEffect(() => {
-    const gatewayOptions = Object.keys(gatewayCounts).sort((left, right) => left.localeCompare(right));
     setSelectedGateways((previous) => mergeSelections(gatewayOptions, previous, knownGatewaysRef.current));
     knownGatewaysRef.current = gatewayOptions;
-  }, [gatewayCounts, mergeSelections]);
+  }, [gatewayOptions, mergeSelections]);
 
   useEffect(() => {
     if (!isPlaying) {
@@ -285,21 +291,30 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
   };
 
   const toggleBoard = (boardId: string) => {
-    setSelectedBoards((previous) =>
-      previous.includes(boardId) ? previous.filter((item) => item !== boardId) : [...previous, boardId],
-    );
+    setSelectedBoards((previous) => {
+      const currentSelection = previous ?? boardOptions;
+      return currentSelection.includes(boardId)
+        ? currentSelection.filter((item) => item !== boardId)
+        : [...currentSelection, boardId];
+    });
   };
 
   const toggleGateway = (gateway: string) => {
-    setSelectedGateways((previous) =>
-      previous.includes(gateway) ? previous.filter((item) => item !== gateway) : [...previous, gateway],
-    );
+    setSelectedGateways((previous) => {
+      const currentSelection = previous ?? gatewayOptions;
+      return currentSelection.includes(gateway)
+        ? currentSelection.filter((item) => item !== gateway)
+        : [...currentSelection, gateway];
+    });
   };
 
   const toggleFollowBoard = (boardId: string) => {
     setFollowedBoardId((previous) => (previous === boardId ? null : boardId));
-    if (!selectedBoards.includes(boardId)) {
-      setSelectedBoards((previous) => [...previous, boardId]);
+    if (selectedBoards === null || !selectedBoards.includes(boardId)) {
+      setSelectedBoards((previous) => {
+        const currentSelection = previous ?? boardOptions;
+        return currentSelection.includes(boardId) ? currentSelection : [...currentSelection, boardId];
+      });
     }
   };
 
@@ -514,10 +529,12 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
         selectedGateways={selectedGateways}
         selectedStability={selectedStability}
         statusMessage={statusMessage}
+        handleLogout={handleLogout}
+        isAdmin={isAdmin}
       />
 
       <section className="map-stage">
-        <div className="map-header-card">
+        {/* <div className="map-header-card">
           <div>
             <p className="eyebrow">Datensatz</p>
             <h2>{summary.validFeatures.toLocaleString("de-DE")} sichtbare Pings</h2>
@@ -556,7 +573,7 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
               </button>
             </div>
           </div>
-        </div>
+        </div> */}
 
         <LoraWanMap
           calculationMode={calculationMode}

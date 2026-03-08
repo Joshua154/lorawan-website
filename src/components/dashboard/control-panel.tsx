@@ -1,6 +1,7 @@
 "use client";
 
 import type { CalculationMode, SignalCategory, StabilityCategory, ViewMode } from "@/lib/types";
+import Link from "next/link";
 
 type ControlPanelProps = {
   canImport: boolean;
@@ -10,8 +11,8 @@ type ControlPanelProps = {
   hexSize: number;
   selectedCategories: SignalCategory[];
   selectedStability: StabilityCategory[];
-  selectedBoards: string[];
-  selectedGateways: string[];
+  selectedBoards: string[] | null;
+  selectedGateways: string[] | null;
   boardCounts: Record<string, number>;
   gatewayCounts: Record<string, number>;
   followedBoardId: string | null;
@@ -19,6 +20,7 @@ type ControlPanelProps = {
   isUpdating: boolean;
   statusMessage: string;
   menuOpen: boolean;
+  isAdmin: boolean;
   onToggleMenu: () => void;
   onImportClick: () => void;
   onShowBonusInfo: () => void;
@@ -31,6 +33,7 @@ type ControlPanelProps = {
   onToggleBoard: (value: string) => void;
   onToggleGateway: (value: string) => void;
   onFollowBoard: (value: string) => void;
+  handleLogout: () => Promise<void>;
 };
 
 const CATEGORY_OPTIONS: Array<{ value: SignalCategory; label: string; color: string }> = [
@@ -85,6 +88,8 @@ export function ControlPanel({
   onToggleBoard,
   onToggleGateway,
   onFollowBoard,
+  handleLogout,
+  isAdmin,
 }: ControlPanelProps) {
   return (
     <>
@@ -94,7 +99,9 @@ export function ControlPanel({
       <aside className={`control-panel ${menuOpen ? "is-open" : ""}`}>
         <div className="panel-header">
           <div>
-            <p className="eyebrow">LoRaWAN x Next.js</p>
+            <p className="eyebrow">LoRaWAN<span className={`role-badge ${isAdmin ? "admin" : "user"}`}>
+              {isAdmin ? "Admin" : "User"}
+            </span></p>
             <h1>GPS Dashboard</h1>
           </div>
           {canImport ? (
@@ -102,6 +109,19 @@ export function ControlPanel({
               📥 Vom Board importieren
             </button>
           ) : null}
+        </div>
+
+        <div className="status-card">
+          <div className="viewer-links">
+            {isAdmin ? (
+              <Link className="secondary-button nav-link-button" href="/admin">
+                Adminbereich
+              </Link>
+            ) : null}
+            <button className="secondary-button" onClick={() => void handleLogout()} type="button">
+              Abmelden
+            </button>
+          </div>
         </div>
 
         <div className="status-card">
@@ -228,7 +248,7 @@ export function ControlPanel({
                   <div className="filter-row" key={boardId}>
                     <label>
                       <input
-                        checked={selectedBoards.includes(boardId)}
+                        checked={selectedBoards === null || selectedBoards.includes(boardId)}
                         onChange={() => onToggleBoard(boardId)}
                         type="checkbox"
                       />
@@ -255,7 +275,7 @@ export function ControlPanel({
               .map((gateway) => (
                 <label key={gateway} title={gateway}>
                   <input
-                    checked={selectedGateways.includes(gateway)}
+                    checked={selectedGateways === null || selectedGateways.includes(gateway)}
                     onChange={() => onToggleGateway(gateway)}
                     type="checkbox"
                   />
