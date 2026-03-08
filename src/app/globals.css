@@ -43,8 +43,10 @@ a {
 
 button,
 input,
-select {
+select,
+label {
   font: inherit;
+  touch-action: manipulation;
 }
 
 .dashboard-shell {
@@ -117,6 +119,9 @@ select {
   border-radius: 0.85rem;
   cursor: pointer;
   transition: transform 160ms ease, opacity 160ms ease, background 160ms ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .primary-button,
@@ -124,18 +129,20 @@ select {
   background: var(--accent);
   color: white;
   padding: 0.8rem 1rem;
+  min-height: 2.75rem;
 }
 
 .secondary-button {
   background: #eef2f7;
   color: var(--text);
   padding: 0.8rem 1rem;
+  min-height: 2.75rem;
 }
 
 .help-button,
 .follow-button {
-  width: 2rem;
-  height: 2rem;
+  width: 2.5rem;
+  height: 2.5rem;
   background: #e2e8f0;
 }
 
@@ -216,6 +223,8 @@ select {
   display: flex;
   align-items: center;
   gap: 0.65rem;
+  min-height: 2.25rem;
+  cursor: pointer;
 }
 
 .filter-row {
@@ -627,8 +636,8 @@ select {
 .range-shell input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 1.2rem;
-  height: 1.2rem;
+  width: 1.5rem;
+  height: 1.5rem;
   border-radius: 999px;
   background: var(--accent);
   border: 2px solid white;
@@ -649,8 +658,8 @@ select {
 }
 
 .range-shell input[type="range"]::-moz-range-thumb {
-  width: 1.2rem;
-  height: 1.2rem;
+  width: 1.5rem;
+  height: 1.5rem;
   border-radius: 999px;
   background: var(--accent);
   border: 2px solid white;
@@ -744,6 +753,25 @@ select {
 }
 
 @media (max-width: 768px) {
+  .control-panel {
+    top: 0;
+    right: 0;
+    height: 100dvh;
+    max-height: 100dvh;
+    width: 100vw;
+    border-radius: 0;
+    border: none;
+    padding-top: 4.5rem;
+    padding-bottom: 3rem;
+  }
+
+  .menu-toggle {
+    top: 0.75rem;
+    right: 0.75rem;
+    width: 3.5rem;
+    height: 3.5rem;
+  }
+
   .map-header-card {
     left: 1rem;
     right: 1rem;
@@ -785,10 +813,25 @@ select {
   .timeline-shell {
     width: calc(100vw - 1rem);
     bottom: 0.5rem;
+    padding: 0.85rem;
+    border-radius: 1.25rem;
   }
 
   .timeline-meta {
     flex-direction: column;
     align-items: stretch;
+    text-align: center;
+    gap: 0.5rem;
+  }
+
+  .timeline-actions {
+    justify-content: center;
+    gap: 0.75rem;
+  }
+
+  .timeline-button {
+    flex: 1;
+    max-width: 10rem;
+    min-height: 3rem;
   }
 }
