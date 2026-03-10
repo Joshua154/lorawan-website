@@ -59,6 +59,9 @@ export type SessionUser = {
 
 export type ManagedUser = SessionUser & {
   createdAt: string;
+  auth_type: "local" | "oauth";
+  oauth_provider: string | null;
+  oauth_subject: string | null;
 };
 
 export type CreateUserPayload = {
@@ -73,3 +76,4 @@ export type DatasetResponse = {
   summary: PingSummary;
   nextUpdateInSeconds: number;
 };
+
