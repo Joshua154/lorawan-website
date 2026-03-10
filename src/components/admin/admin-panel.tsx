@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import type { CreateUserPayload, ManagedUser, PingSummary, SessionUser, UserRole } from "@/lib/types";
+import { type CreateUserPayload, type ManagedUser, type PingSummary, type SessionUser, type UserRole } from "@/lib/types";
 
 type AdminPanelProps = {
   viewer: SessionUser;
@@ -309,7 +309,7 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
             {managedUsers.map((user) => (
               <article className="admin-user-row" key={user.id}>
                 <div>
-                  <strong>{user.username}</strong>
+                  <><strong>{user.username}</strong> - {user.auth_type === "oauth" ? `OAuth (${user.oauth_provider})` : "Lokal"}</>
                   <p>
                     {user.role === "admin"
                       ? "Admin · Zugriff auf alle Boards"
