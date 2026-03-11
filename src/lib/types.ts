@@ -30,6 +30,12 @@ export type PingFeatureCollection = {
   features: PingFeature[];
 };
 
+export type RestrictedHexagon = {
+  corners: Coordinates[];
+  avg: number;
+  fillColor: string;
+};
+
 export type PingSummary = {
   totalFeatures: number;
   validFeatures: number;
@@ -71,9 +77,19 @@ export type CreateUserPayload = {
   assignedBoardIds: string[];
 };
 
-export type DatasetResponse = {
+export type AuthenticatedDatasetResponse = {
+  accessMode: "authenticated";
   collection: PingFeatureCollection;
   summary: PingSummary;
   nextUpdateInSeconds: number;
 };
+
+export type GuestDatasetResponse = {
+  accessMode: "guest";
+  restrictedHexagons: RestrictedHexagon[];
+  summary: PingSummary;
+  nextUpdateInSeconds: number;
+};
+
+export type DatasetResponse = AuthenticatedDatasetResponse | GuestDatasetResponse;
 
