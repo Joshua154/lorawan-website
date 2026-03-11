@@ -3,6 +3,7 @@
 import type { CalculationMode, SignalCategory, StabilityCategory, ViewMode } from "@/lib/types";
 import Link from "next/link";
 import { useState } from "react";
+import { useTranslation } from "@/i18n/useTranslation";
 
 type ControlPanelProps = {
   canImport: boolean;
@@ -37,25 +38,27 @@ type ControlPanelProps = {
   handleLogout: () => Promise<void>;
 };
 
-const CATEGORY_OPTIONS: Array<{ value: SignalCategory; label: string; color: string }> = [
-  { value: "good", label: "Sehr gut", color: "#2e7d32" },
-  { value: "medium", label: "Mittel", color: "#f59e0b" },
-  { value: "bad", label: "Schlecht", color: "#dc2626" },
-  { value: "deadzone", label: "Funkloch", color: "#111827" },
+const CATEGORY_OPTIONS: Array<{ value: SignalCategory; key: string; color: string }> = [
+  { value: "good", key: "dashboard.quality.categories.good", color: "#2e7d32" },
+  { value: "medium", key: "dashboard.quality.categories.medium", color: "#f59e0b" },
+  { value: "bad", key: "dashboard.quality.categories.bad", color: "#dc2626" },
+  { value: "deadzone", key: "dashboard.quality.categories.deadzone", color: "#111827" },
 ];
 
-const STABILITY_OPTIONS: Array<{ value: StabilityCategory; label: string }> = [
-  { value: "0", label: "Schlecht / Keine Aussage" },
-  { value: "unregular", label: "Unregelmäßig" },
-  { value: "good", label: "Gut" },
-  { value: "stable", label: "Sehr stabil" },
+const STABILITY_OPTIONS: Array<{ value: StabilityCategory; key: string }> = [
+  { value: "0", key: "dashboard.stability.levels.0" },
+  { value: "unregular", key: "dashboard.stability.levels.unregular" },
+  { value: "good", key: "dashboard.stability.levels.good" },
+  { value: "stable", key: "dashboard.stability.levels.stable" },
 ];
+
+// colors kept on the CATEGORY_OPTIONS entries
 
 const HEX_SIZES = [
-  { value: 0.0008, label: "Klein" },
-  { value: 0.0015, label: "Mittel" },
-  { value: 0.0035, label: "Groß" },
-  { value: 0.007, label: "Sehr groß" },
+  { value: 0.0008, key: "dashboard.hex.sizes.small" },
+  { value: 0.0015, key: "dashboard.hex.sizes.medium" },
+  { value: 0.0035, key: "dashboard.hex.sizes.large" },
+  { value: 0.007, key: "dashboard.hex.sizes.xlarge" },
 ];
 
 const HEX_MIN_POINTS = [1, 5, 10, 25];
@@ -92,6 +95,7 @@ export function ControlPanel({
   handleLogout,
   isAdmin,
 }: ControlPanelProps) {
+  const { t } = useTranslation();
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
 
   const toggleSection = (section: string) => {
@@ -107,13 +111,13 @@ export function ControlPanel({
         <div className="panel-header">
           <div>
             <p className="eyebrow">LoRaWAN<span className={`role-badge ${isAdmin ? "admin" : "user"}`}>
-              {isAdmin ? "Admin" : "User"}
+              {isAdmin ? t("common.roles.admin") : t("common.roles.user")}
             </span></p>
-            <h1>GPS Dashboard</h1>
+            <h1>{t("dashboard.panel.heading")}</h1>
           </div>
           {canImport ? (
             <button className="primary-button" onClick={onImportClick} type="button">
-              📥 Vom Board importieren
+              {t("dashboard.panel.importFromBoard")}
             </button>
           ) : null}
         </div>
@@ -122,21 +126,21 @@ export function ControlPanel({
           <div className="viewer-links">
             {isAdmin ? (
               <Link className="secondary-button nav-link-button" href="/admin">
-                Adminbereich
+                {t("dashboard.panel.adminArea")}
               </Link>
             ) : null}
             <button className="secondary-button" onClick={() => void handleLogout()} type="button">
-              Abmelden
+              {t("common.actions.logout")}
             </button>
           </div>
         </div>
 
         <div className="status-card">
           <div>
-            <span className="status-label">Automatisches Update</span>
-            <strong>{isUpdating ? "Läuft…" : `in ${countdown}s`}</strong>
+            <span className="status-label">{t("dashboard.status.autoUpdate")}</span>
+            <strong>{isUpdating ? t("dashboard.status.running") : t("dashboard.status.inSeconds", { count: countdown })}</strong>
           </div>
-          <span className={`status-pill ${isUpdating ? "busy" : "ready"}`}>{statusMessage || "Bereit"}</span>
+          <span className={`status-pill ${isUpdating ? "busy" : "ready"}`}>{statusMessage || t("dashboard.status.ready")}</span>
         </div>
 
         <section className="panel-section">
@@ -145,7 +149,7 @@ export function ControlPanel({
             style={{ cursor: "pointer", userSelect: "none" }}
             onClick={() => toggleSection("display")}
           >
-            <h2 style={{ margin: 0 }}>Anzeigemodus</h2>
+            <h2 style={{ margin: 0 }}>{t("dashboard.display.title")}</h2>
             <span style={{ fontSize: "0.8rem", color: "var(--muted)" }}>
               {collapsedSections["display"] ? "▼" : "▲"}
             </span>
@@ -154,10 +158,10 @@ export function ControlPanel({
             <div style={{ marginTop: "0.85rem" }}>
               <div className="stacked-options">
                 {[
-                  ["markers", "Messpunkte"],
-                  ["heatmap", "Heatmap"],
-                  ["hexagon", "Hexagon-Netz"],
-                ].map(([value, label]) => (
+                    ["markers", t("dashboard.display.modes.markers")],
+                    ["heatmap", t("dashboard.display.modes.heatmap")],
+                    ["hexagon", t("dashboard.display.modes.hexagon")],
+                  ].map(([value, label]) => (
                   <label key={value}>
                     <input
                       checked={mode === value}
@@ -172,7 +176,7 @@ export function ControlPanel({
               {mode === "hexagon" ? (
                 <div className="sub-grid" style={{ marginTop: "0.65rem" }}>
                   <label>
-                    <span>Min. Punkte pro Wabe</span>
+                    <span>{t("dashboard.hex.minPoints")}</span>
                     <select value={minHexPoints} onChange={(event) => onMinHexPointsChange(Number(event.target.value))}>
                       {HEX_MIN_POINTS.map((value) => (
                         <option key={value} value={value}>
@@ -182,11 +186,11 @@ export function ControlPanel({
                     </select>
                   </label>
                   <label>
-                    <span>Hexagon-Größe</span>
+                    <span>{t("dashboard.hex.size")}</span>
                     <select value={hexSize} onChange={(event) => onHexSizeChange(Number(event.target.value))}>
                       {HEX_SIZES.map((option) => (
                         <option key={option.value} value={option.value}>
-                          {option.label}
+                          {t(option.key)}
                         </option>
                       ))}
                     </select>
@@ -204,7 +208,7 @@ export function ControlPanel({
             onClick={() => toggleSection("calculation")}
           >
             <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-              <h2 style={{ margin: 0 }}>Signalberechnung</h2>
+              <h2 style={{ margin: 0 }}>{t("dashboard.calculation.title")}</h2>
               <button
                 className="help-button"
                 onClick={(e) => {
@@ -230,7 +234,7 @@ export function ControlPanel({
                     onChange={() => onCalculationModeChange("stabilized")}
                     type="radio"
                   />
-                  <span>Mit Stabilitäts-Bonus</span>
+                  <span>{t("dashboard.calculation.withBonus")}</span>
                 </label>
                 <label>
                   <input
@@ -238,7 +242,7 @@ export function ControlPanel({
                     onChange={() => onCalculationModeChange("raw")}
                     type="radio"
                   />
-                  <span>Ohne Bonus</span>
+                  <span>{t("dashboard.calculation.withoutBonus")}</span>
                 </label>
               </div>
             </div>
@@ -251,7 +255,7 @@ export function ControlPanel({
             style={{ cursor: "pointer", userSelect: "none" }}
             onClick={() => toggleSection("quality")}
           >
-            <h2 style={{ margin: 0 }}>Signalqualität</h2>
+            <h2 style={{ margin: 0 }}>{t("dashboard.quality.title")}</h2>
             <span style={{ fontSize: "0.8rem", color: "var(--muted)" }}>
               {collapsedSections["quality"] ? "▼" : "▲"}
             </span>
@@ -267,7 +271,7 @@ export function ControlPanel({
                       type="checkbox"
                     />
                     <span className="legend-dot" style={{ backgroundColor: option.color }} />
-                    <span>{option.label}</span>
+                    <span>{t(option.key)}</span>
                   </label>
                 ))}
               </div>
@@ -281,7 +285,7 @@ export function ControlPanel({
             style={{ cursor: "pointer", userSelect: "none" }}
             onClick={() => toggleSection("stability")}
           >
-            <h2 style={{ margin: 0 }}>Signalstabilität</h2>
+            <h2 style={{ margin: 0 }}>{t("dashboard.stability.title")}</h2>
             <span style={{ fontSize: "0.8rem", color: "var(--muted)" }}>
               {collapsedSections["stability"] ? "▼" : "▲"}
             </span>
@@ -296,7 +300,7 @@ export function ControlPanel({
                       onChange={() => onToggleStability(option.value)}
                       type="checkbox"
                     />
-                    <span>{option.label}</span>
+                    <span>{t(option.key)}</span>
                   </label>
                 ))}
               </div>
@@ -310,7 +314,7 @@ export function ControlPanel({
             style={{ cursor: "pointer", userSelect: "none" }}
             onClick={() => toggleSection("boards")}
           >
-            <h2 style={{ margin: 0 }}>Boards</h2>
+            <h2 style={{ margin: 0 }}>{t("dashboard.filters.boardsTitle")}</h2>
             <span style={{ fontSize: "0.8rem", color: "var(--muted)" }}>
               {collapsedSections["boards"] ? "▼" : "▲"}
             </span>
@@ -330,7 +334,7 @@ export function ControlPanel({
                             onChange={() => onToggleBoard(boardId)}
                             type="checkbox"
                           />
-                          <span>{`Board ${boardId} (${boardCounts[boardId]})`}</span>
+                          <span>{t("dashboard.filters.boardLabel", { id: boardId, count: boardCounts[boardId] })}</span>
                         </label>
                         <button
                           className={`follow-button ${following ? "active" : ""}`}
@@ -353,7 +357,7 @@ export function ControlPanel({
             style={{ cursor: "pointer", userSelect: "none" }}
             onClick={() => toggleSection("gateways")}
           >
-            <h2 style={{ margin: 0 }}>Gateways</h2>
+            <h2 style={{ margin: 0 }}>{t("dashboard.filters.gatewaysTitle")}</h2>
             <span style={{ fontSize: "0.8rem", color: "var(--muted)" }}>
               {collapsedSections["gateways"] ? "▼" : "▲"}
             </span>
@@ -370,7 +374,7 @@ export function ControlPanel({
                         onChange={() => onToggleGateway(gateway)}
                         type="checkbox"
                       />
-                      <span>{`${gateway} (${gatewayCounts[gateway]})`}</span>
+                      <span>{t("dashboard.filters.gatewayLabel", { gateway, count: gatewayCounts[gateway] })}</span>
                     </label>
                   ))}
               </div>

@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -19,6 +18,7 @@ import type {
 import { ControlPanel } from "@/components/dashboard/control-panel";
 import { TimelineControls } from "@/components/dashboard/timeline-controls";
 import { LoraWanMap } from "@/components/map/lorawan-map";
+import { useTranslation } from "@/i18n/useTranslation";
 
 type RangeState = {
   start: number;
@@ -35,6 +35,7 @@ const DEFAULT_STABILITY_CATEGORIES: StabilityCategory[] = ["0", "unregular", "go
 
 export function DashboardShell({ viewer }: DashboardShellProps) {
   const router = useRouter();
+  const { t } = useTranslation();
   const isAdmin = viewer.role === "admin";
   const [collection, setCollection] = useState<PingFeatureCollection>(EMPTY_COLLECTION);
   const [summary, setSummary] = useState<PingSummary>(summarizeCollection(EMPTY_COLLECTION));
@@ -51,7 +52,7 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
   const [countdown, setCountdown] = useState(AUTO_REFRESH_SECONDS);
   const [isUpdating, setIsUpdating] = useState(false);
-  const [statusMessage, setStatusMessage] = useState("Bereit");
+  const [statusMessage, setStatusMessage] = useState(t("dashboard.status.ready"));
   const [followedBoardId, setFollowedBoardId] = useState<string | null>(null);
   const [newFeatureKeys, setNewFeatureKeys] = useState<string[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -90,7 +91,7 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
 
   const filteredFeatures = useMemo(() => {
     return rangedFeatures.filter((feature) => {
-      const gateway = feature.properties.gateway ?? "Offline-Import (Flash)";
+      const gateway = feature.properties.gateway ?? t("map.sources.offlineImport");
       const category = getSignalCategory(
         feature.properties.rssi,
         calculationMode === "stabilized" ? feature.properties.rssi_stabilized : undefined,
@@ -104,7 +105,7 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
         selectedStability.includes(stabilityCategory)
       );
     });
-  }, [calculationMode, rangedFeatures, selectedBoards, selectedCategories, selectedGateways, selectedStability]);
+  }, [calculationMode, rangedFeatures, selectedBoards, selectedCategories, selectedGateways, selectedStability, t]);
 
   const followedFeature = useMemo(() => {
     if (!followedBoardId) {
@@ -120,8 +121,8 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
   const rangeLabel = useMemo(() => {
     const startLabel = formatTimestamp(sortedFeatures[range.start]?.properties.time);
     const endLabel = formatTimestamp(sortedFeatures[range.end]?.properties.time);
-    return `Von ${startLabel} bis ${endLabel}`;
-  }, [range.end, range.start, sortedFeatures]);
+    return t("dashboard.range.fromTo", { start: startLabel, end: endLabel });
+  }, [range.end, range.start, sortedFeatures, t]);
 
   const mergeSelections = useCallback((options: string[], previous: string[] | null, known: string[]) => {
     if (previous === null || (previous.length === 0 && known.length === 0)) {
@@ -219,18 +220,18 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
     }
 
     setIsUpdating(true);
-    setStatusMessage("Lade Daten…");
+    setStatusMessage(t("dashboard.status.loading"));
 
     try {
       await fetchDataset(true);
-      setStatusMessage("✅ Aktuell");
+      setStatusMessage(t("dashboard.status.current"));
     } catch {
-      setStatusMessage("❌ Server nicht erreichbar");
+      setStatusMessage(t("dashboard.status.unreachable"));
     } finally {
       setIsUpdating(false);
-      window.setTimeout(() => setStatusMessage("Bereit"), 5_000);
+      window.setTimeout(() => setStatusMessage(t("dashboard.status.ready")), 5_000);
     }
-  }, [fetchDataset, isUpdating]);
+  }, [fetchDataset, isUpdating, t]);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -313,7 +314,7 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
     setImportModalOpen(false);
 
     if (!("serial" in navigator)) {
-      window.alert("Dein Browser unterstützt keine Web Serial API. Bitte nutze Chrome oder Edge.");
+      window.alert(t("dashboard.import.serialUnsupported"));
       return;
     }
 
@@ -331,7 +332,7 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
 
       const reader = port?.readable.getReader();
       let csvData = "";
-      setStatusMessage("📡 Lese Board-Daten…");
+      setStatusMessage(t("dashboard.import.readingBoard"));
 
       try {
         while (reader) {
@@ -370,7 +371,7 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
         !(error instanceof DOMException) ||
         (error.name !== "NotFoundError" && error.name !== "AbortError")
       ) {
-        window.alert("Fehler beim Import. Tipp: Drücke kurz den RST-Knopf am Board.");
+        window.alert(t("dashboard.import.error"));
       }
     } finally {
       await port?.close().catch(() => undefined);
@@ -424,15 +425,15 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
             counter: parsedCounter,
             time: new Date().toISOString(),
             rssi: -1,
-            gateway: "Offline-Import (Flash)",
+            gateway: t("map.sources.offlineImport"),
           },
         });
       }
     }
 
     if (extractedPings.length === 0) {
-      window.alert("Keine neuen Messpunkte gefunden. Alle Daten sind bereits vorhanden.");
-      setStatusMessage("Bereit");
+      window.alert(t("dashboard.import.noNewPoints"));
+      setStatusMessage(t("dashboard.status.ready"));
       return;
     }
 
@@ -449,24 +450,24 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
 
     if (!response.ok) {
       const result = (await response.json()) as { message?: string };
-      throw new Error(result.message ?? "Upload fehlgeschlagen");
+      throw new Error(result.message ?? t("dashboard.import.error"));
     }
 
     const result = (await response.json()) as { added: number; updated: number };
     await fetchDataset(true);
 
     if (result.added > 0 && result.updated > 0) {
-      window.alert(`${result.added} neue Funklöcher gespeichert und ${result.updated} bestehende Einträge aktualisiert.`);
+      window.alert(t("dashboard.import.results.addedUpdated", { added: result.added, updated: result.updated }));
     } else if (result.added > 0) {
-      window.alert(`${result.added} neue Messpunkte wurden dauerhaft gespeichert.`);
+      window.alert(t("dashboard.import.results.added", { added: result.added }));
     } else if (result.updated > 0) {
-      window.alert(`${result.updated} Funklöcher wurden durch präzisere Daten ersetzt.`);
+      window.alert(t("dashboard.import.results.updated", { updated: result.updated }));
     } else {
-      window.alert("Keine neuen Daten zum Speichern gefunden.");
+      window.alert(t("dashboard.import.results.none"));
     }
 
-    setStatusMessage("✅ Import abgeschlossen");
-    window.setTimeout(() => setStatusMessage("Bereit"), 5_000);
+    setStatusMessage(t("dashboard.import.completed"));
+    window.setTimeout(() => setStatusMessage(t("dashboard.status.ready")), 5_000);
   };
 
   const maxRangeIndex = Math.max(sortedFeatures.length - 1, 0);
@@ -508,47 +509,6 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
       />
 
       <section className="map-stage">
-        {/* <div className="map-header-card">
-          <div>
-            <p className="eyebrow">Datensatz</p>
-            <h2>{summary.validFeatures.toLocaleString("de-DE")} sichtbare Pings</h2>
-            <p className="map-subtitle">
-              {isAdmin
-                ? `Administrator ${viewer.username} · Alle Boards sichtbar`
-                : `${viewer.username} · ${viewer.assignedBoardIds.length} freigeschaltete Boards`}
-            </p>
-          </div>
-          <div className="summary-grid">
-            <article>
-              <span>Boards</span>
-              <strong>{Object.keys(summary.boardCounts).length}</strong>
-            </article>
-            <article>
-              <span>Gateways</span>
-              <strong>{Object.keys(summary.gatewayCounts).length}</strong>
-            </article>
-            <article>
-              <span>Letzter Ping</span>
-              <strong>{formatTimestamp(summary.latestTimestamp)}</strong>
-            </article>
-          </div>
-          <div className="viewer-actions">
-            <span className={`role-badge ${isAdmin ? "admin" : "user"}`}>
-              {isAdmin ? "Admin" : "User"}
-            </span>
-            <div className="viewer-links">
-              {isAdmin ? (
-                <Link className="secondary-button nav-link-button" href="/admin">
-                  Adminbereich
-                </Link>
-              ) : null}
-              <button className="secondary-button" onClick={() => void handleLogout()} type="button">
-                Abmelden
-              </button>
-            </div>
-          </div>
-        </div> */}
-
         <LoraWanMap
           calculationMode={calculationMode}
           features={filteredFeatures}
@@ -569,7 +529,7 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
           onPlayPause={togglePlayback}
           onStartChange={(value) => setRange((currentRange) => ({ ...currentRange, start: Math.min(value, currentRange.end) }))}
           playbackSpeed={playbackSpeed}
-          pointCountLabel={`${filteredFeatures.length} Messpunkte im Bereich`}
+          pointCountLabel={t("dashboard.timeline.pointsInRange", { count: filteredFeatures.length })}
           start={range.start}
         />
       </section>
@@ -580,17 +540,12 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
             <button className="close-button" onClick={() => setBonusInfoOpen(false)} type="button">
               ×
             </button>
-            <h3>Was ist ein Stabilitätsbonus?</h3>
-            <p>
-              Messpunkte erhalten einen Bonus, wenn mehrere vorherige Pings desselben Boards innerhalb von 175 Metern
-              stabil empfangen wurden.
-            </p>
+            <h3>{t("dashboard.help.bonus.title")}</h3>
+            <p>{t("dashboard.help.bonus.description")}</p>
             <ul>
-              <li>5/5 Pings: +15 dB</li>
-              <li>4/5 Pings: +10 dB</li>
-              <li>3/5 Pings: +5 dB</li>
-              <li>2/5 Pings: +2 dB</li>
-              <li>1/5 Ping: +1 dB</li>
+                {[5, 4, 3, 2, 1].map((bonus) => (
+              <li key={bonus}>{t(`dashboard.help.bonus.tiers.${bonus}`)}</li>
+                ))}
             </ul>
           </div>
         </div>
@@ -600,21 +555,20 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
         <div className="modal-overlay" onClick={() => setImportModalOpen(false)}>
           <div className="modal-card" onClick={(event) => event.stopPropagation()}>
             <button className="close-button" onClick={() => setImportModalOpen(false)} type="button">
-              ×
+              x
             </button>
-            <h3>Board auslesen</h3>
+            <h3>{t("dashboard.import.modal.title")}</h3>
             <ol>
-              <li>Board per USB verbinden.</li>
-              <li>Vor dem Import kurz den RST-Knopf drücken.</li>
-              <li>Im Browser das passende USB-Gerät auswählen.</li>
-              <li>Innerhalb der ersten 15 Sekunden nach dem Start auslesen.</li>
+                {[1, 2, 3, 4].map((bonus) => (
+                <li key={bonus}>{t(`dashboard.import.modal.steps.${bonus}`)}</li>
+                ))}
             </ol>
             <div className="modal-actions">
               <button className="primary-button" onClick={() => void readFromBoard()} type="button">
-                Verbindung starten
+                {t("dashboard.import.modal.readBoard")}
               </button>
               <button className="secondary-button" onClick={() => setDriverInfoOpen(true)} type="button">
-                Windows-Treiber
+                {t("dashboard.import.modal.driverInfo")}
               </button>
             </div>
           </div>
@@ -625,12 +579,11 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
         <div className="modal-overlay" onClick={() => setDriverInfoOpen(false)}>
           <div className="modal-card" onClick={(event) => event.stopPropagation()}>
             <button className="close-button" onClick={() => setDriverInfoOpen(false)} type="button">
-              ×
+              x
             </button>
-            <h3>Treiber für Windows</h3>
+            <h3>{t("dashboard.help.driver.title")}</h3>
             <p>
-              Falls das Board unter Windows nicht erkannt wird, installiere den CP210x VCP Treiber von Silicon Labs und
-              starte den Browser neu.
+              {t("dashboard.help.driver.description")}
             </p>
             <a
               className="text-link"
@@ -638,7 +591,7 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
               rel="noreferrer"
               target="_blank"
             >
-              Treiber herunterladen
+              {t("dashboard.help.driver.linkText")}
             </a>
           </div>
         </div>
