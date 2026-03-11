@@ -4,6 +4,8 @@
     "common.form.role": "Role",
     "common.roles.admin": "Admin",
     "common.roles.user": "User",
+    "common.roles.guest": "Gast",
+    "common.actions.login": "Anmelden",
     "common.actions.logout": "Abmelden",
 
     "auth.login.actions.submit": "Sign in",
@@ -42,6 +44,8 @@
     "dashboard.panel.heading": "GPS Dashboard",
     "dashboard.panel.importFromBoard": "📥 Vom Board importieren",
     "dashboard.panel.adminArea": "Adminbereich",
+    "dashboard.guest.notice": "Im Gastmodus werden nur aggregierte Hexagon-Zellen ohne genaue Messpunkte angezeigt.",
+    "dashboard.guest.hexagonOnly": "Der Gastmodus ist auf die Hexagon-Ansicht beschränkt.",
     "dashboard.status.autoUpdate": "Automatisches Update",
     "dashboard.status.running": "Läuft...",
     "dashboard.status.inSeconds": "in {count}s",
@@ -115,5 +119,6 @@
     "map.hexagon.title": "Wabe",
     "map.hexagon.realAverage": "Real Ø:",
     "map.hexagon.effectiveAverage": "Effektiv Ø:",
-    "map.hexagon.pointCount": "Messpunkte: {count}"
+    "map.hexagon.pointAvg": "Ø: {avg} dBm",
+    "map.hexagon.restricted": "Eingeschränkte Gastansicht"
 }

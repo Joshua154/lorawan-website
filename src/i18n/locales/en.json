@@ -4,6 +4,8 @@
 	"common.form.role": "Role",
 	"common.roles.admin": "Admin",
 	"common.roles.user": "User",
+	"common.roles.guest": "Guest",
+	"common.actions.login": "Sign in",
 	"common.actions.logout": "Sign out",
 
 	"auth.login.actions.submit": "Sign in",
@@ -42,6 +44,8 @@
 	"dashboard.panel.heading": "GPS Dashboard",
 	"dashboard.panel.importFromBoard": "📥 Import from board",
 	"dashboard.panel.adminArea": "Admin area",
+	"dashboard.guest.notice": "Guest mode only shows aggregated hexagon cells without precise measurement points.",
+	"dashboard.guest.hexagonOnly": "Guest mode is limited to the hexagon view.",
 	"dashboard.status.autoUpdate": "Automatic update",
 	"dashboard.status.running": "Running…",
 	"dashboard.status.inSeconds": "in {count}s",
@@ -115,5 +119,6 @@
 	"map.hexagon.title": "Hexagon",
 	"map.hexagon.realAverage": "Real avg:",
 	"map.hexagon.effectiveAverage": "Effective avg:",
-	"map.hexagon.pointCount": "Points: {count}"
+    "map.hexagon.pointAvg": "Avg: {avg} dBm",
+	"map.hexagon.restricted": "Restricted guest view"
 }
