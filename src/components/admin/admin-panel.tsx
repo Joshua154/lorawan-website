@@ -523,7 +523,7 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
                     <>
                       <div className="admin-user-editor">
                         <div className="admin-user-heading">
-                          <strong>{t("admin.users.editor.title", { username: user.username })}</strong>
+                          <strong>{t("admin.users.editor.title", { username: user.username, self: user.id === viewer.id ? t("admin.users.editor.self") : "" })}</strong>
                           <span className="admin-user-meta-text">
                             {user.auth_type === "oauth"
                               ? t("admin.users.list.accountType.oauth", { provider: user.oauth_provider ?? "" })
@@ -609,7 +609,7 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
                     <>
                       <div className="admin-user-main">
                         <div className="admin-user-heading">
-                          <strong>{user.username}</strong>
+                          <strong style={{color: user.id === viewer.id ? "red" : ""}}>{user.username} {user.id === viewer.id ? t("admin.users.editor.self") : ""}</strong>
                           <span className="admin-user-meta-text">
                             {user.auth_type === "oauth"
                               ? t("admin.users.list.accountType.oauth", { provider: user.oauth_provider ?? "" })
