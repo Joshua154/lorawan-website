@@ -1,17 +1,37 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: lorawan-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: lorawan
+      POSTGRES_USER: lorawan
+      POSTGRES_PASSWORD: lorawan
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lorawan -d lorawan"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   lorawan-dashboard:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: lorawan-dashboard
     restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
     ports:
       - "3000:3000"
-    volumes:
-      # Persists the user sessions / auth database and pings map data
-      - lorawan_data:/app/data
     environment:
       - NODE_ENV=production
+      - DATABASE_URL=postgresql://lorawan:lorawan@postgres:5432/lorawan
       
       # Optional: Override the initial default credentials
       # - LORAWAN_ADMIN_USERNAME=admin
@@ -24,4 +44,4 @@ services:
       # - LORAWAN_LOG_URL=http://stadtrandelfen.dsmynas.org:8008/test/2026_gps.log
 
 volumes:
-  lorawan_data:
+  postgres_data:
