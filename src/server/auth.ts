@@ -2,7 +2,7 @@ import { compareSync, hashSync } from "bcryptjs";
 import { cookies } from "next/headers";
 
 import type { CreateUserPayload, ManagedUser, SessionUser, UserRole } from "@/lib/types";
-import { getDatabase } from "@/server/database";
+import { query, withTransaction } from "@/server/database";
 
 const SESSION_COOKIE_NAME = "lorawan_session";
 const SESSION_DURATION_MS = 1000 * 60 * 60 * 24 * 14;
@@ -12,7 +12,7 @@ type UserRow = {
   username: string;
   password_hash: string;
   role: UserRole;
-  created_at: string;
+  created_at: string | Date;
   auth_type: "local" | "oauth";
   oauth_provider: string | null;
   oauth_subject: string | null;
@@ -22,12 +22,20 @@ type SessionLookupRow = {
   id: number;
   username: string;
   role: UserRole;
-  created_at: string;
-  expires_at: string;
+  created_at: string | Date;
+  expires_at: string | Date;
   auth_type: "local" | "oauth";
   oauth_provider: string | null;
   oauth_subject: string | null;
 };
+
+type BoardRow = {
+  board_id: string;
+};
+
+function toIsoString(value: string | Date): string {
+  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+}
 
 function normalizeBoardIds(boardIds: string[]): string[] {
   return [...new Set(boardIds.map((boardId) => boardId.trim()).filter(Boolean))].sort((left, right) => {
@@ -42,22 +50,24 @@ function normalizeBoardIds(boardIds: string[]): string[] {
   });
 }
 
-function getAssignedBoardIds(userId: number): string[] {
-  const database = getDatabase();
-  const rows = database
-    .prepare("SELECT board_id FROM user_boards WHERE user_id = ? ORDER BY board_id ASC")
-    .all(userId) as Array<{ board_id: string }>;
+async function getAssignedBoardIds(userId: number): Promise<string[]> {
+  const { rows } = await query<BoardRow>(
+    "SELECT board_id FROM user_boards WHERE user_id = $1 ORDER BY board_id ASC",
+    [userId],
+  );
 
   return rows.map((row) => String(row.board_id));
 }
 
-function mapUser(row: Pick<UserRow, "id" | "username" | "role" | "created_at" | "auth_type" | "oauth_provider" | "oauth_subject">): ManagedUser {
+async function mapUser(
+  row: Pick<UserRow, "id" | "username" | "role" | "created_at" | "auth_type" | "oauth_provider" | "oauth_subject">,
+): Promise<ManagedUser> {
   return {
     id: row.id,
     username: row.username,
     role: row.role,
-    createdAt: row.created_at,
-    assignedBoardIds: row.role === "admin" ? [] : getAssignedBoardIds(row.id),
+    createdAt: toIsoString(row.created_at),
+    assignedBoardIds: row.role === "admin" ? [] : await getAssignedBoardIds(row.id),
     auth_type: row.auth_type,
     oauth_provider: row.oauth_provider,
     oauth_subject: row.oauth_subject,
@@ -73,8 +83,8 @@ function toSessionUser(user: ManagedUser): SessionUser {
   };
 }
 
-function cleanupExpiredSessions(): void {
-  getDatabase().prepare("DELETE FROM sessions WHERE expires_at <= ?").run(new Date().toISOString());
+async function cleanupExpiredSessions(): Promise<void> {
+  await query("DELETE FROM sessions WHERE expires_at <= $1::timestamptz", [new Date().toISOString()]);
 }
 
 function validateNewUserPayload(payload: CreateUserPayload): { role: UserRole; assignedBoardIds: string[] } {
@@ -118,38 +128,34 @@ function getPreferredExternalUsername(user: ExternalSessionUser, provider: strin
   return user.name?.trim() || user.email?.trim() || `${provider}:${subject}`;
 }
 
-function upsertOauthUser(provider: string, subject: string, preferredUsername: string): SessionUser {
-  const database = getDatabase();
-  const row = database
-    .prepare(
-      `SELECT id, username, role, created_at, auth_type, oauth_provider, oauth_subject
-       FROM users
-       WHERE auth_type = 'oauth' AND oauth_provider = ? AND oauth_subject = ?`,
-    )
-    .get(provider, subject) as Pick<UserRow, "id" | "username" | "role" | "created_at" | "auth_type" | "oauth_provider" | "oauth_subject"> | undefined;
+async function upsertOauthUser(provider: string, subject: string, preferredUsername: string): Promise<SessionUser> {
+  const { rows } = await query<Pick<UserRow, "id" | "username" | "role" | "created_at" | "auth_type" | "oauth_provider" | "oauth_subject">>(
+    `SELECT id, username, role, created_at, auth_type, oauth_provider, oauth_subject
+     FROM users
+     WHERE auth_type = 'oauth' AND oauth_provider = $1 AND oauth_subject = $2`,
+    [provider, subject],
+  );
+  const row = rows[0];
 
   if (row) {
     if (preferredUsername && preferredUsername !== row.username) {
-      database.prepare("UPDATE users SET username = ? WHERE id = ?").run(preferredUsername, row.id);
+      await query("UPDATE users SET username = $1 WHERE id = $2", [preferredUsername, row.id]);
       row.username = preferredUsername;
     }
 
-    return toSessionUser(mapUser(row));
+    return toSessionUser(await mapUser(row));
   }
 
-  const result = database
-    .prepare(
-      `INSERT INTO users (username, password_hash, role, auth_type, oauth_provider, oauth_subject)
-       VALUES (?, '', 'user', 'oauth', ?, ?)`,
-    )
-    .run(preferredUsername, provider, subject);
+  const createdResult = await query<Pick<UserRow, "id" | "username" | "role" | "created_at" | "auth_type" | "oauth_provider" | "oauth_subject">>(
+    `
+      INSERT INTO users (username, password_hash, role, auth_type, oauth_provider, oauth_subject)
+      VALUES ($1, '', 'user', 'oauth', $2, $3)
+      RETURNING id, username, role, created_at, auth_type, oauth_provider, oauth_subject
+    `,
+    [preferredUsername, provider, subject],
+  );
 
-  const userId = Number(result.lastInsertRowid);
-  const created = database
-    .prepare("SELECT id, username, role, created_at, auth_type, oauth_provider, oauth_subject FROM users WHERE id = ?")
-    .get(userId) as Pick<UserRow, "id" | "username" | "role" | "created_at" | "auth_type" | "oauth_provider" | "oauth_subject">;
-
-  return toSessionUser(mapUser(created));
+  return toSessionUser(await mapUser(createdResult.rows[0]));
 }
 
 export async function getCurrentUser(): Promise<SessionUser | null> {
@@ -166,7 +172,7 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
   }
 
   // Fallback to traditional local session cookie
-  cleanupExpiredSessions();
+  await cleanupExpiredSessions();
   const cookieStore = await cookies();
   const sessionId = cookieStore.get(SESSION_COOKIE_NAME)?.value;
 
@@ -174,49 +180,50 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
     return null;
   }
 
-  const row = getDatabase()
-    .prepare(
-      `SELECT users.id, users.username, users.role, users.created_at, sessions.expires_at, users.auth_type, users.oauth_provider, users.oauth_subject
-       FROM sessions
-       INNER JOIN users ON users.id = sessions.user_id
-       WHERE sessions.id = ? AND sessions.expires_at > ?`,
-    )
-    .get(sessionId, new Date().toISOString()) as SessionLookupRow | undefined;
+  const { rows } = await query<SessionLookupRow>(
+    `SELECT users.id, users.username, users.role, users.created_at, sessions.expires_at, users.auth_type, users.oauth_provider, users.oauth_subject
+     FROM sessions
+     INNER JOIN users ON users.id = sessions.user_id
+     WHERE sessions.id = $1 AND sessions.expires_at > $2::timestamptz`,
+    [sessionId, new Date().toISOString()],
+  );
+  const row = rows[0];
 
   if (!row) {
     return null;
   }
 
-  return toSessionUser(mapUser(row));
+  return toSessionUser(await mapUser(row));
 }
 
-export function authenticateUser(username: string, password: string): SessionUser | null {
-  cleanupExpiredSessions();
+export async function authenticateUser(username: string, password: string): Promise<SessionUser | null> {
+  await cleanupExpiredSessions();
   const normalizedUsername = username.trim();
-  const database = getDatabase();
-  const row = database
-    .prepare(
-      `SELECT id, username, password_hash, role, created_at, auth_type, oauth_provider, oauth_subject
-       FROM users
-       WHERE auth_type = 'local' AND username = ?`,
-    )
-    .get(normalizedUsername) as UserRow | undefined;
+  const { rows } = await query<UserRow>(
+    `SELECT id, username, password_hash, role, created_at, auth_type, oauth_provider, oauth_subject
+     FROM users
+     WHERE auth_type = 'local' AND username = $1`,
+    [normalizedUsername],
+  );
+  const row = rows[0];
 
   if (!row || !compareSync(password, row.password_hash)) {
     return null;
   }
 
-  return toSessionUser(mapUser(row));
+  return toSessionUser(await mapUser(row));
 }
 
 export async function createSession(userId: number): Promise<void> {
-  cleanupExpiredSessions();
+  await cleanupExpiredSessions();
   const sessionId = crypto.randomUUID();
   const expiresAt = new Date(Date.now() + SESSION_DURATION_MS);
 
-  getDatabase()
-    .prepare("INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)")
-    .run(sessionId, userId, expiresAt.toISOString());
+  await query("INSERT INTO sessions (id, user_id, expires_at) VALUES ($1, $2, $3::timestamptz)", [
+    sessionId,
+    userId,
+    expiresAt.toISOString(),
+  ]);
 
   const cookieStore = await cookies();
   cookieStore.set(SESSION_COOKIE_NAME, sessionId, {
@@ -233,7 +240,7 @@ export async function destroyCurrentSession(): Promise<void> {
   const sessionId = cookieStore.get(SESSION_COOKIE_NAME)?.value;
 
   if (sessionId) {
-    getDatabase().prepare("DELETE FROM sessions WHERE id = ?").run(sessionId);
+    await query("DELETE FROM sessions WHERE id = $1", [sessionId]);
   }
 
   cookieStore.set(SESSION_COOKIE_NAME, "", {
@@ -245,49 +252,43 @@ export async function destroyCurrentSession(): Promise<void> {
   });
 }
 
-export function listUsers(): ManagedUser[] {
-  const rows = getDatabase()
-    .prepare("SELECT id, username, role, created_at, auth_type, oauth_provider, oauth_subject FROM users ORDER BY role ASC, username ASC")
-    .all() as Array<Pick<UserRow, "id" | "username" | "role" | "created_at" | "auth_type" | "oauth_provider" | "oauth_subject">>;
+export async function listUsers(): Promise<ManagedUser[]> {
+  const { rows } = await query<Pick<UserRow, "id" | "username" | "role" | "created_at" | "auth_type" | "oauth_provider" | "oauth_subject">>(
+    "SELECT id, username, role, created_at, auth_type, oauth_provider, oauth_subject FROM users ORDER BY role ASC, username ASC",
+  );
 
-  return rows.map(mapUser);
+  return Promise.all(rows.map((row) => mapUser(row)));
 }
 
-export function createUser(payload: CreateUserPayload): ManagedUser {
+export async function createUser(payload: CreateUserPayload): Promise<ManagedUser> {
   const username = payload.username.trim();
   const password = payload.password.trim();
   const { role, assignedBoardIds } = validateNewUserPayload(payload);
-  const database = getDatabase();
-
-  const existing = database
-    .prepare("SELECT id FROM users WHERE auth_type = 'local' AND username = ?")
-    .get(username) as
-    | { id: number }
-    | undefined;
+  const existingResult = await query<{ id: number }>(
+    "SELECT id FROM users WHERE auth_type = 'local' AND username = $1",
+    [username],
+  );
+  const existing = existingResult.rows[0];
 
   if (existing) {
     throw new Error("A user with this username already exists.");
   }
 
-  const insertUser = database.prepare(
-    "INSERT INTO users (username, password_hash, role, auth_type) VALUES (?, ?, ?, ?)",
-  );
-  const insertBoard = database.prepare("INSERT INTO user_boards (user_id, board_id) VALUES (?, ?)");
-
-  const transaction = database.transaction(() => {
-    const result = insertUser.run(username, hashSync(password, 12), role, "local");
-    const userId = Number(result.lastInsertRowid);
+  return withTransaction(async (client) => {
+    const createdResult = await client.query<Pick<UserRow, "id" | "username" | "role" | "created_at" | "auth_type" | "oauth_provider" | "oauth_subject">>(
+      `
+        INSERT INTO users (username, password_hash, role, auth_type)
+        VALUES ($1, $2, $3, 'local')
+        RETURNING id, username, role, created_at, auth_type, oauth_provider, oauth_subject
+      `,
+      [username, hashSync(password, 12), role],
+    );
+    const created = createdResult.rows[0];
 
     for (const boardId of assignedBoardIds) {
-      insertBoard.run(userId, boardId);
+      await client.query("INSERT INTO user_boards (user_id, board_id) VALUES ($1, $2)", [created.id, boardId]);
     }
-
-    const created = database
-      .prepare("SELECT id, username, role, created_at, auth_type, oauth_provider, oauth_subject FROM users WHERE id = ?")
-      .get(userId) as Pick<UserRow, "id" | "username" | "role" | "created_at" | "auth_type" | "oauth_provider" | "oauth_subject">;
 
     return mapUser(created);
   });
-
-  return transaction();
 }

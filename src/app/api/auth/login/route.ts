@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: "Username and password are required." }, { status: 400 });
   }
 
-  const user = authenticateUser(username, password);
+  const user = await authenticateUser(username, password);
 
   if (!user) {
     return NextResponse.json({ message: "Invalid username or password." }, { status: 401 });

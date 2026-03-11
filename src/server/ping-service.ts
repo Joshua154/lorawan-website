@@ -1,15 +1,23 @@
-import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
-
-import { EMPTY_COLLECTION, isValidCoordinate, summarizeCollection } from "@/lib/pings";
+import { isValidCoordinate, summarizeCollection } from "@/lib/pings";
 import type { PingFeature, PingFeatureCollection, PingSummary, UpdateResult } from "@/lib/types";
+import { query, replacePingFeatures } from "@/server/database";
 
 const CACHE_DURATION_MS = 30_000;
 const LOOKBACK_HOURS = 6;
 const DEFAULT_LOG_URL = "http://stadtrandelfen.dsmynas.org:8008/test/2026_gps.log";
-const APP_DATA_DIR = path.join(process.cwd(), "data");
-const APP_DATA_FILE = path.join(APP_DATA_DIR, "pings.geojson");
-const LEGACY_DATA_FILE = path.join(process.cwd(), "old", "data", "pings.geojson");
+
+type PingRow = {
+  board_id: string;
+  counter: number;
+  gateway_name: string | null;
+  rssi: number;
+  snr: number | null;
+  observed_at: string | Date;
+  longitude: number;
+  latitude: number;
+  rssi_stabilized: number | null;
+  rssi_bonus: number | null;
+};
 
 type CacheState = {
   lastLogUpdate: number;
@@ -38,43 +46,53 @@ if (!globalThis.__pingPollingIntervalStarted) {
   setInterval(() => {
     runRemoteUpdate().catch((error) => console.error("Background ping update failed:", error));
   }, CACHE_DURATION_MS);
-  
+
   setTimeout(() => {
     runRemoteUpdate().catch((error) => console.error("Initial ping update failed:", error));
   }, 1000);
 }
 
-async function ensureDataFile(): Promise<void> {
-  await mkdir(APP_DATA_DIR, { recursive: true });
+function toIsoString(value: string | Date): string {
+  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+}
 
-  try {
-    await readFile(APP_DATA_FILE, "utf8");
-  } catch {
-    try {
-      await copyFile(LEGACY_DATA_FILE, APP_DATA_FILE);
-    } catch {
-      await writeFile(APP_DATA_FILE, JSON.stringify(EMPTY_COLLECTION, null, 2));
-    }
-  }
+function mapPingRow(row: PingRow): PingFeature {
+  return {
+    type: "Feature",
+    geometry: {
+      type: "Point",
+      coordinates: [Number(row.longitude), Number(row.latitude)],
+    },
+    properties: {
+      boardID: row.board_id,
+      counter: Number(row.counter),
+      gateway: row.gateway_name ?? undefined,
+      rssi: Number(row.rssi),
+      snr: row.snr == null ? undefined : Number(row.snr),
+      time: toIsoString(row.observed_at),
+      rssi_stabilized: row.rssi_stabilized == null ? undefined : Number(row.rssi_stabilized),
+      rssi_bonus: row.rssi_bonus == null ? undefined : Number(row.rssi_bonus),
+    },
+  };
 }
 
 export async function loadFeatureCollection(): Promise<PingFeatureCollection> {
-  await ensureDataFile();
-  const raw = await readFile(APP_DATA_FILE, "utf8");
+  const { rows } = await query<PingRow>(
+    `
+      SELECT board_id, counter, gateway_name, rssi, snr, observed_at, longitude, latitude, rssi_stabilized, rssi_bonus
+      FROM ping_features
+      ORDER BY observed_at ASC, feature_id ASC
+    `,
+  );
 
-  try {
-    const parsed = JSON.parse(raw) as PingFeatureCollection;
-    return parsed?.type === "FeatureCollection" && Array.isArray(parsed.features)
-      ? parsed
-      : EMPTY_COLLECTION;
-  } catch {
-    return EMPTY_COLLECTION;
-  }
+  return {
+    type: "FeatureCollection",
+    features: rows.map(mapPingRow),
+  };
 }
 
 async function saveFeatureCollection(collection: PingFeatureCollection): Promise<void> {
-  await ensureDataFile();
-  await writeFile(APP_DATA_FILE, JSON.stringify(collection, null, 2));
+  await replacePingFeatures(collection.features);
 }
 
 function getDistanceMeters(lon1: number, lat1: number, lon2: number, lat2: number): number {

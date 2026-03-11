@@ -17,7 +17,7 @@ export async function GET() {
     return NextResponse.json({ message: "Forbidden." }, { status: 403 });
   }
 
-  return NextResponse.json({ users: listUsers() });
+  return NextResponse.json({ users: await listUsers() });
 }
 
 export async function POST(request: NextRequest) {
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const payload = (await request.json()) as CreateUserPayload;
-    const createdUser = createUser(payload);
+    const createdUser = await createUser(payload);
     return NextResponse.json({ user: createdUser }, { status: 201 });
   } catch (error) {
     return NextResponse.json(
