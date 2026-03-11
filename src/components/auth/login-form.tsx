@@ -2,9 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useTranslation } from "@/i18n/useTranslation";
 
 export function LoginForm() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -25,14 +27,14 @@ export function LoginForm() {
       const payload = (await response.json()) as { message?: string };
 
       if (!response.ok) {
-        setErrorMessage(payload.message ?? "Login failed.");
+        setErrorMessage(payload.message ?? t("auth.login.errors.failed"));
         return;
       }
 
       router.push("/");
       router.refresh();
     } catch {
-      setErrorMessage("The server is currently unavailable.");
+      setErrorMessage(t("auth.login.errors.serverUnavailable"));
     } finally {
       setIsSubmitting(false);
     }
@@ -41,7 +43,7 @@ export function LoginForm() {
   return (
     <form className="login-form" onSubmit={handleSubmit}>
       <label>
-        <span>Username</span>
+        <span>{t("common.form.username")}</span>
         <input
           autoComplete="username"
           onChange={(event) => setUsername(event.target.value)}
@@ -52,7 +54,7 @@ export function LoginForm() {
       </label>
 
       <label>
-        <span>Password</span>
+        <span>{t("common.form.password")}</span>
         <input
           autoComplete="current-password"
           onChange={(event) => setPassword(event.target.value)}
@@ -65,7 +67,7 @@ export function LoginForm() {
       {errorMessage ? <p className="form-message error">{errorMessage}</p> : null}
 
       <button className="primary-button login-submit" disabled={isSubmitting} type="submit">
-        {isSubmitting ? "Signing in…" : "Sign in"}
+        {isSubmitting ? t("auth.login.actions.submitting") : t("auth.login.actions.submit")}
       </button>
     </form>
   );

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { type CreateUserPayload, type ManagedUser, type PingSummary, type SessionUser, type UserRole } from "@/lib/types";
+import { useTranslation } from "@/i18n/useTranslation";
 
 type AdminPanelProps = {
   viewer: SessionUser;
@@ -39,6 +40,8 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
     router.push("/login");
     router.refresh();
   }, [router]);
+
+  const { t } = useTranslation();
 
   const boardOptions = useMemo(
     () => Object.keys(summary?.boardCounts ?? {}).sort((left, right) => Number(left) - Number(right)),
@@ -161,18 +164,18 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
       <section className="admin-page-shell">
         <header className="admin-toolbar">
           <div>
-            <p className="eyebrow">Administration</p>
-            <h1>Benutzer und Board-Zugriff</h1>
-            <p className="login-copy">Angemeldet als {viewer.username}. Admins können Nutzer anlegen und alle Boards sehen.</p>
+            <p className="eyebrow">{t("admin.header.eyebrow")}</p>
+            <h1>{t("admin.header.title")}</h1>
+            <p className="login-copy">{t("admin.header.subtitle", { username: viewer.username })}</p>
           </div>
           <div className="viewer-actions admin-toolbar-actions">
-            <span className="role-badge admin">Admin</span>
+            <span className="role-badge admin">{t("common.roles.admin")}</span>
             <div className="admin-toolbar-links">
               <Link className="secondary-button nav-link-button" href="/">
-                Zurück zum Dashboard
+                {t("admin.navigation.backToDashboard")}
               </Link>
               <button className="secondary-button" onClick={() => void handleLogout()} type="button">
-                Abmelden
+                {t("common.actions.logout")}
               </button>
             </div>
           </div>
@@ -182,15 +185,15 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
           <article className="admin-card admin-form-card">
             <div className="admin-card-header">
               <div>
-                <p className="eyebrow">Neuer Benutzer</p>
-                <h3>Account anlegen</h3>
+                <p className="eyebrow">{t("admin.users.form.eyebrow")}</p>
+                <h3>{t("admin.users.form.title")}</h3>
               </div>
-              <span className="admin-count">{managedUsers.length} Accounts</span>
+              <span className="admin-count">{t("admin.users.count", { count: managedUsers.length })}</span>
             </div>
 
             <form className="admin-form" onSubmit={handleCreateUser}>
               <label>
-                <span>Username</span>
+                <span>{t("common.form.username")}</span>
                 <input
                   onChange={(event) =>
                     setUserForm((currentForm) => ({ ...currentForm, username: event.target.value }))
@@ -202,7 +205,7 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
               </label>
 
               <label>
-                <span>Password</span>
+                <span>{t("common.form.password")}</span>
                 <input
                   onChange={(event) =>
                     setUserForm((currentForm) => ({ ...currentForm, password: event.target.value }))
@@ -214,7 +217,7 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
               </label>
 
               <label>
-                <span>Role</span>
+                <span>{t("common.form.role")}</span>
                 <select
                   onChange={(event) =>
                     setUserForm((currentForm) => ({
@@ -225,14 +228,14 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
                   }
                   value={userForm.role}
                 >
-                  <option value="user">User</option>
-                  <option value="admin">Admin</option>
+                  <option value="user">{t("common.roles.user")}</option>
+                  <option value="admin">{t("common.roles.admin")}</option>
                 </select>
               </label>
 
               {userForm.role === "user" ? (
                 <div className="admin-board-picker">
-                  <span>Sichtbare Boards</span>
+                  <span>{t("admin.boards.title")}</span>
                   <div className="admin-board-grid">
                     {boardOptions.map((boardId) => (
                       <label key={boardId}>
@@ -241,19 +244,19 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
                           onChange={() => toggleAssignedBoard(boardId)}
                           type="checkbox"
                         />
-                        <span>{`Board ${boardId}`}</span>
+                        <span>{t("admin.boards.boardLabel", { id: boardId })}</span>
                       </label>
                     ))}
                   </div>
                 </div>
               ) : (
-                <p className="helper-text">Admins can always see every board.</p>
+                <p className="helper-text">{t("admin.boards.helper")}</p>
               )}
 
               {userFeedback ? <p className={`form-message ${userFeedback.kind}`}>{userFeedback.message}</p> : null}
 
               <button className="primary-button" disabled={isSavingUser || isLoading} type="submit">
-                {isSavingUser ? "Speichert…" : "Benutzer anlegen"}
+                {isSavingUser ? t("admin.users.form.submitting") : t("admin.users.form.submit")}
               </button>
             </form>
           </article>
@@ -261,30 +264,30 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
           <article className="admin-card admin-summary-card">
             <div className="admin-card-header">
               <div>
-                <p className="eyebrow">Dataset</p>
-                <h3>Verfügbare Boards</h3>
+                <p className="eyebrow">{t("admin.summary.eyebrow")}</p>
+                <h3>{t("admin.summary.title")}</h3>
               </div>
-              <span className="admin-count">{boardOptions.length} Boards</span>
+              <span className="admin-count">{t("admin.boards.count", { count: boardOptions.length })}</span>
             </div>
 
             <div className="summary-grid admin-summary-grid">
               <article>
-                <span>Boards</span>
+                <span>{t("admin.summary.metrics.boards")}</span>
                 <strong>{Object.keys(summary?.boardCounts ?? {}).length}</strong>
               </article>
               <article>
-                <span>Gateways</span>
+                <span>{t("admin.summary.metrics.gateways")}</span>
                 <strong>{Object.keys(summary?.gatewayCounts ?? {}).length}</strong>
               </article>
               <article>
-                <span>Letzter Ping</span>
+                <span>{t("admin.summary.metrics.lastPing")}</span>
                 <strong>{summary?.latestTimestamp ? new Date(summary.latestTimestamp).toLocaleString("de-DE") : "--"}</strong>
               </article>
             </div>
 
             <div className="admin-board-list">
               {boardOptions.map((boardId) => (
-                <div className="admin-board-chip" key={boardId}>{`Board ${boardId}`}</div>
+                <div className="admin-board-chip" key={boardId}>{t("admin.boards.boardLabel", { id: boardId })}</div>
               ))}
             </div>
           </article>
@@ -293,11 +296,11 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
         <section className="admin-card admin-list-card">
           <div className="admin-card-header">
             <div>
-              <p className="eyebrow">Benutzerliste</p>
-              <h3>Aktive Accounts</h3>
+              <p className="eyebrow">{t("admin.users.list.eyebrow")}</p>
+              <h3>{t("admin.users.list.title")}</h3>
             </div>
             <button className="secondary-button" onClick={() => void loadAdminData()} type="button">
-              {isLoading ? "Lädt…" : "Neu laden"}
+              {isLoading ? t("admin.users.list.loading") : t("admin.users.list.refresh")}
             </button>
           </div>
 
@@ -309,13 +312,13 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
             {managedUsers.map((user) => (
               <article className="admin-user-row" key={user.id}>
                 <div>
-                  <><strong>{user.username}</strong> - {user.auth_type === "oauth" ? `OAuth (${user.oauth_provider})` : "Lokal"}</>
+                  <><strong>{user.username}</strong> - {user.auth_type === "oauth" ? t("admin.users.list.accountType.oauth", { provider: user.oauth_provider ?? "" }) : t("admin.users.list.accountType.local")}</>
                   <p>
                     {user.role === "admin"
-                      ? "Admin · Zugriff auf alle Boards"
+                      ? t("common.roles.admin") + " - " + t("admin.boards.helper")
                       : user.assignedBoardIds.length > 0
-                        ? `Boards: ${user.assignedBoardIds.join(", ")}`
-                        : "Keine Boards zugewiesen"}
+                        ? t("admin.boards.assigned", { list: user.assignedBoardIds.join(", ") })
+                        : t("admin.boards.none")}
                   </p>
                 </div>
                 <span className={`role-badge ${user.role}`}>{user.role}</span>

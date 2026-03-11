@@ -12,6 +12,7 @@ import type {
 import { useEffect, useMemo, useRef } from "react";
 
 import { buildFeatureKey, getSignalCategory, getSignalColor } from "@/lib/pings";
+import { useTranslation } from "@/i18n/useTranslation";
 import type { CalculationMode, PingFeature, ViewMode } from "@/lib/types";
 
 type MarkerWithRssi = CircleMarker & {
@@ -55,9 +56,9 @@ type LoraWanMapProps = {
   minHexPoints: number;
 };
 
-function getPopupHtml(feature: PingFeature, calculationMode: CalculationMode): string {
-  const gateway = feature.properties.gateway ?? "Offline-Import (Flash)";
-  const realRssi = feature.properties.rssi === -1 ? "Funkloch" : `${feature.properties.rssi} dBm`;
+function getPopupHtml(feature: PingFeature, calculationMode: CalculationMode, t: (key: string, vars?: Record<string, string | number>) => string): string {
+  const gateway = feature.properties.gateway ?? t("map.sources.offlineImport");
+  const realRssi = feature.properties.rssi === -1 ? t("dashboard.quality.categories.deadzone") : `${feature.properties.rssi} dBm`;
   const effectiveRssi =
     calculationMode === "stabilized"
       ? `${feature.properties.rssi_stabilized ?? feature.properties.rssi} dBm`
@@ -66,13 +67,13 @@ function getPopupHtml(feature: PingFeature, calculationMode: CalculationMode): s
 
   return `
     <div style="font-family: system-ui, sans-serif; min-width: 200px; line-height: 1.5;">
-      <strong style="font-size: 1rem;">Messpunkt #${feature.properties.counter}</strong>
+      <strong style="font-size: 1rem;">${t("map.popup.point")}${feature.properties.counter}</strong>
       <hr style="margin: 6px 0; border: 0; border-top: 1px solid #e5e7eb;" />
-      <div><strong>Board ID:</strong> ${feature.properties.boardID}</div>
-      <div><strong>Signal (Real):</strong> ${realRssi}${bonus}</div>
-      <div><strong>Signal (Effektiv):</strong> ${effectiveRssi}</div>
-      <div><strong>Gateway:</strong> ${gateway}</div>
-      <div><strong>Zeit:</strong> ${new Intl.DateTimeFormat("de-DE", {
+      <div><strong>${t("map.popup.boardId")}</strong> ${feature.properties.boardID}</div>
+      <div><strong>${t("map.popup.signalReal")}</strong> ${realRssi}${bonus}</div>
+      <div><strong>${t("map.popup.signalEffective")}</strong> ${effectiveRssi}</div>
+      <div><strong>${t("map.popup.gateway")}</strong> ${gateway}</div>
+      <div><strong>${t("map.popup.time")}</strong> ${new Intl.DateTimeFormat("de-DE", {
         day: "2-digit",
         month: "2-digit",
         hour: "2-digit",
@@ -92,6 +93,7 @@ export function LoraWanMap({
   hexSize,
   minHexPoints,
 }: LoraWanMapProps) {
+  const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<LeafletMap | null>(null);
   const leafletRef = useRef<LeafletWithPlugins | null>(null);
@@ -227,7 +229,7 @@ export function LoraWanMap({
           ? feature.properties.rssi_stabilized ?? feature.properties.rssi
           : feature.properties.rssi;
         marker.on("click", (event: LeafletMouseEvent) => {
-          L.popup().setLatLng(event.latlng).setContent(getPopupHtml(feature, calculationMode)).openOn(map);
+          L.popup().setLatLng(event.latlng).setContent(getPopupHtml(feature, calculationMode, t)).openOn(map);
         });
         clusterLayer.addLayer(marker);
 
@@ -379,11 +381,11 @@ export function LoraWanMap({
           color: "#ffffff",
         }).bindPopup(`
           <div style="text-align:center;font-family:system-ui,sans-serif;line-height:1.45;">
-            <strong>Wabe</strong><br />
+            <strong>${t("map.hexagon.title")}</strong><br />
             <hr style="margin:6px 0;border:0;border-top:1px solid #e5e7eb;" />
-            Real Ø: <strong>${Math.round(realRssiSum / bin.points.length)} dBm</strong><br />
-            ${isStabilized ? `Effektiv Ø: <strong>${Math.round(effectiveRssiSum / bin.points.length)} dBm</strong><br />` : ""}
-            Messpunkte: ${bin.points.length}
+            ${t("map.hexagon.realAverage")} <strong>${Math.round(realRssiSum / bin.points.length)} dBm</strong><br />
+            ${isStabilized ? `${t("map.hexagon.effectiveAverage")} <strong>${Math.round(effectiveRssiSum / bin.points.length)} dBm</strong><br />` : ""}
+            ${t("map.hexagon.pointCount", { count: bin.points.length })}
           </div>
         `);
 
@@ -398,7 +400,7 @@ export function LoraWanMap({
       const [longitude, latitude] = followedFeature.geometry.coordinates;
       map.flyTo([latitude, longitude], 18, { duration: 1.5 });
     }
-  }, [calculationMode, featureKeySet, features, followedFeature, hexSize, minHexPoints, mode]);
+  }, [calculationMode, featureKeySet, features, followedFeature, hexSize, minHexPoints, mode, t]);
 
   return <div className="map-canvas" ref={containerRef} />;
 }
