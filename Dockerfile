@@ -1,20 +1,51 @@
-# Basisimage mit Python 3.11
-FROM python:3.11-slim
+FROM node:20-alpine AS base
 
-# Arbeitsverzeichnis im Container
+# 1. Install dependencies only when needed
+FROM base AS deps
+# Install python and build tools for better-sqlite3 native compilation
+RUN apk add --no-cache libc6-compat python3 make g++
 WORKDIR /app
 
-# Abhängigkeiten installieren
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Install dependencies based on the preferred package manager
+COPY package.json package-lock.json* ./
+RUN npm ci || npm install
 
-# Alle Projektdateien kopieren
+# 2. Rebuild the source code only when needed
+FROM base AS builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-RUN mkdir -p data
+# Run the Next.js build
+RUN npm run build
 
-# Port 4000 im Container
-EXPOSE 4000
+# 3. Production image, copy all the files and run next
+FROM base AS runner
+WORKDIR /app
 
-# Flask Server starten auf Port 4000
-CMD ["python", "update_geojson_server.py", "--port", "4000"]
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+
+RUN addgroup -g 1001 -S nodejs
+RUN adduser -S nextjs -u 1001
+
+# Create the data directory and ensure proper permissions for the Next.js user
+RUN mkdir -p /app/data && chown nextjs:nodejs /app/data
+
+# We aren't doing STANDALONE output here gracefully out of the box, 
+# so we preserve the standard Node modules and start script to reliably run SQLite.
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder --chown=nextjs:nodejs /app/.next ./.next
+
+# Safely copy the public directory if it exists
+COPY --from=builder /app/public* ./public/
+
+USER nextjs
+
+EXPOSE 3000
+
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
+
+CMD ["npm", "start"]
