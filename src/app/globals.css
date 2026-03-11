@@ -838,7 +838,7 @@ label {
 
   .timeline-shell {
     width: calc(100vw - 1rem);
-    bottom: 0.5rem;
+    bottom: 4rem;
     padding: 0.85rem;
     border-radius: 1.25rem;
   }
