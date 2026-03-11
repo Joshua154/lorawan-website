@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import type { PoolClient } from "pg";
 
 import type { CreateUserPayload, ManagedUser, SessionUser, UpdateUserPayload, UserRole } from "@/lib/types";
+import { normalizeBoardIds } from "@/lib/users";
 import { query, withTransaction } from "@/server/database";
 
 const SESSION_COOKIE_NAME = "lorawan_session";
@@ -40,19 +41,6 @@ type QueryableClient = {
 
 function toIsoString(value: string | Date): string {
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
-}
-
-function normalizeBoardIds(boardIds: string[]): string[] {
-  return [...new Set(boardIds.map((boardId) => boardId.trim()).filter(Boolean))].sort((left, right) => {
-    const leftNumber = Number(left);
-    const rightNumber = Number(right);
-
-    if (!Number.isNaN(leftNumber) && !Number.isNaN(rightNumber)) {
-      return leftNumber - rightNumber;
-    }
-
-    return left.localeCompare(right);
-  });
 }
 
 async function getAssignedBoardIds(userId: number, client?: QueryableClient): Promise<string[]> {

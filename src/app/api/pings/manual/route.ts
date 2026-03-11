@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import type { PingFeature } from "@/lib/types";
-import { getCurrentUser } from "@/server/auth";
+import { requireAuthenticatedUser } from "@/server/api-auth";
 import { uploadManualPings } from "@/server/ping-service";
 import { ensureJsonRequest, ensureTrustedOrigin } from "@/server/request-security";
 
@@ -20,10 +20,10 @@ export async function POST(request: NextRequest) {
     return jsonError;
   }
 
-  const user = await getCurrentUser();
+  const auth = await requireAuthenticatedUser();
 
-  if (!user) {
-    return NextResponse.json({ message: "Unauthorized." }, { status: 401 });
+  if ("response" in auth) {
+    return auth.response;
   }
 
   // if (user.role !== "admin") {

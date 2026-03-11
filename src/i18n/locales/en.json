@@ -53,7 +53,8 @@
 	"admin.users.filters.clear": "Clear filters",
 	"admin.users.empty.title": "No matching users",
 	"admin.users.empty.description": "Try a different search or reset the filters.",
-	"admin.users.editor.title": "Editing {username}",
+	"admin.users.editor.title": "Editing {username} {self}",
+	"admin.users.editor.self": "(you)",
 	"admin.users.feedback.updated": "User updated.",
 	"admin.users.feedback.deleted": "Deleted {username}.",
 	"admin.users.delete.confirm": "Delete {username}? This cannot be undone.",
@@ -124,7 +125,7 @@
 	"dashboard.import.modal.title": "Read board",
 	"dashboard.import.modal.steps.1": "Connect the board via USB.",
 	"dashboard.import.modal.steps.2": "Briefly press the RST button before importing.",
-	"dashboard.import.modal.steps.3": "Select the correct USB device in the browser.",
+	"dashboard.import.modal.steps.3": "Select the correct USB device in the browser (UART CP210x USB Controller).",
 	"dashboard.import.modal.steps.4": "Read within the first 15 seconds after startup.",
 	"dashboard.import.modal.readBoard": "Start connection",
 	"dashboard.import.modal.driverInfo": "Windows driver",
@@ -150,5 +151,11 @@
 	"map.hexagon.realAverage": "Real avg:",
 	"map.hexagon.effectiveAverage": "Effective avg:",
     "map.hexagon.pointAvg": "Avg: {avg} dBm",
-	"map.hexagon.restricted": "Restricted guest view"
+	"map.hexagon.restricted": "Restricted guest view",
+
+	"login.title": "LoRaWAN Dashboard",
+	"login.heading": "Sign in",
+	"login.copy": "Admins can manage all boards and create users. Regular users only see their assigned boards.",
+	"login.divider": "or",
+	"login.sign.keycloak": "Sign in with Keycloak"
 }

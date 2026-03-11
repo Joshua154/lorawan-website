@@ -1,21 +1,21 @@
 import { NextResponse } from "next/server";
 
 import { filterCollectionByBoards, summarizeCollection } from "@/lib/pings";
-import { getCurrentUser } from "@/server/auth";
+import { requireAuthenticatedUser } from "@/server/api-auth";
 import { getPings } from "@/server/ping-service";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const user = await getCurrentUser();
+  const auth = await requireAuthenticatedUser();
 
-  if (!user) {
-    return NextResponse.json({ message: "Unauthorized." }, { status: 401 });
+  if ("response" in auth) {
+    return auth.response;
   }
 
   const { collection } = await getPings();
   const visibleCollection =
-    user.role === "admin" ? collection : filterCollectionByBoards(collection, user.assignedBoardIds);
+    auth.user.role === "admin" ? collection : filterCollectionByBoards(collection, auth.user.assignedBoardIds);
 
   return NextResponse.json(summarizeCollection(visibleCollection));
 }
