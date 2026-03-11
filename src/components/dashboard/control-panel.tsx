@@ -7,6 +7,7 @@ import { useTranslation } from "@/i18n/useTranslation";
 
 type ControlPanelProps = {
   canImport: boolean;
+  isGuest: boolean;
   mode: ViewMode;
   calculationMode: CalculationMode;
   minHexPoints: number;
@@ -52,8 +53,6 @@ const STABILITY_OPTIONS: Array<{ value: StabilityCategory; key: string }> = [
   { value: "stable", key: "dashboard.stability.levels.stable" },
 ];
 
-// colors kept on the CATEGORY_OPTIONS entries
-
 const HEX_SIZES = [
   { value: 0.0008, key: "dashboard.hex.sizes.small" },
   { value: 0.0015, key: "dashboard.hex.sizes.medium" },
@@ -65,6 +64,7 @@ const HEX_MIN_POINTS = [1, 5, 10, 25];
 
 export function ControlPanel({
   canImport,
+  isGuest,
   mode,
   calculationMode,
   minHexPoints,
@@ -97,6 +97,11 @@ export function ControlPanel({
 }: ControlPanelProps) {
   const { t } = useTranslation();
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
+  const roleLabel = isGuest
+    ? t("common.roles.guest")
+    : isAdmin
+      ? t("common.roles.admin")
+      : t("common.roles.user");
 
   const toggleSection = (section: string) => {
     setCollapsedSections((prev) => ({ ...prev, [section]: !prev[section] }));
@@ -111,9 +116,10 @@ export function ControlPanel({
         <div className="panel-header">
           <div>
             <p className="eyebrow">LoRaWAN<span className={`role-badge ${isAdmin ? "admin" : "user"}`}>
-              {isAdmin ? t("common.roles.admin") : t("common.roles.user")}
+              {roleLabel}
             </span></p>
             <h1>{t("dashboard.panel.heading")}</h1>
+            {isGuest ? <p className="helper-text">{t("dashboard.guest.notice")}</p> : null}
           </div>
           {canImport ? (
             <button className="primary-button" onClick={onImportClick} type="button">
@@ -124,84 +130,97 @@ export function ControlPanel({
 
         <div className="status-card">
           <div className="viewer-links">
-            {isAdmin ? (
+            {isGuest ? (
+              <Link className="secondary-button nav-link-button" href="/login">
+                {t("common.actions.login")}
+              </Link>
+            ) : null}
+            {!isGuest && isAdmin ? (
               <Link className="secondary-button nav-link-button" href="/admin">
                 {t("dashboard.panel.adminArea")}
               </Link>
             ) : null}
-            <button className="secondary-button" onClick={() => void handleLogout()} type="button">
-              {t("common.actions.logout")}
-            </button>
+            {!isGuest ? (
+              <button className="secondary-button" onClick={() => void handleLogout()} type="button">
+                {t("common.actions.logout")}
+              </button>
+            ) : null}
           </div>
         </div>
 
-        <div className="status-card">
+        {!isGuest || true ? <div className="status-card">
           <div>
             <span className="status-label">{t("dashboard.status.autoUpdate")}</span>
             <strong>{isUpdating ? t("dashboard.status.running") : t("dashboard.status.inSeconds", { count: countdown })}</strong>
           </div>
           <span className={`status-pill ${isUpdating ? "busy" : "ready"}`}>{statusMessage || t("dashboard.status.ready")}</span>
-        </div>
+        </div> : null}
 
-        <section className="panel-section">
-          <div
-            className="section-title-row"
-            style={{ cursor: "pointer", userSelect: "none" }}
-            onClick={() => toggleSection("display")}
-          >
-            <h2 style={{ margin: 0 }}>{t("dashboard.display.title")}</h2>
-            <span style={{ fontSize: "0.8rem", color: "var(--muted)" }}>
-              {collapsedSections["display"] ? "▼" : "▲"}
-            </span>
-          </div>
-          {!collapsedSections["display"] && (
-            <div style={{ marginTop: "0.85rem" }}>
-              <div className="stacked-options">
-                {[
-                    ["markers", t("dashboard.display.modes.markers")],
-                    ["heatmap", t("dashboard.display.modes.heatmap")],
-                    ["hexagon", t("dashboard.display.modes.hexagon")],
-                  ].map(([value, label]) => (
-                  <label key={value}>
-                    <input
-                      checked={mode === value}
-                      name="mode"
-                      onChange={() => onModeChange(value as ViewMode)}
-                      type="radio"
-                    />
-                    <span>{label}</span>
-                  </label>
-                ))}
-              </div>
-              {mode === "hexagon" ? (
-                <div className="sub-grid" style={{ marginTop: "0.65rem" }}>
-                  <label>
-                    <span>{t("dashboard.hex.minPoints")}</span>
-                    <select value={minHexPoints} onChange={(event) => onMinHexPointsChange(Number(event.target.value))}>
-                      {HEX_MIN_POINTS.map((value) => (
-                        <option key={value} value={value}>
-                          {value}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    <span>{t("dashboard.hex.size")}</span>
-                    <select value={hexSize} onChange={(event) => onHexSizeChange(Number(event.target.value))}>
-                      {HEX_SIZES.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {t(option.key)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-              ) : null}
+        {!isGuest ? (
+          <section className="panel-section">
+            <div
+              className="section-title-row"
+              style={{ cursor: "pointer", userSelect: "none" }}
+              onClick={() => toggleSection("display")}
+            >
+              <h2 style={{ margin: 0 }}>{t("dashboard.display.title")}</h2>
+              <span style={{ fontSize: "0.8rem", color: "var(--muted)" }}>
+                {collapsedSections["display"] ? "▼" : "▲"}
+              </span>
             </div>
-          )}
-        </section>
+            {!collapsedSections["display"] && (
+              <div style={{ marginTop: "0.85rem" }}>
+                {isGuest ? (
+                  <p className="helper-text">{t("dashboard.guest.hexagonOnly")}</p>
+                ) : (
+                  <div className="stacked-options">
+                    {[
+                      ["markers", t("dashboard.display.modes.markers")],
+                      ["heatmap", t("dashboard.display.modes.heatmap")],
+                      ["hexagon", t("dashboard.display.modes.hexagon")],
+                    ].map(([value, label]) => (
+                      <label key={value}>
+                        <input
+                          checked={mode === value}
+                          name="mode"
+                          onChange={() => onModeChange(value as ViewMode)}
+                          type="radio"
+                        />
+                        <span>{label}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+                {mode === "hexagon" ? (
+                  <div className="sub-grid" style={{ marginTop: "0.65rem" }}>
+                    <label>
+                      <span>{t("dashboard.hex.minPoints")}</span>
+                      <select value={minHexPoints} onChange={(event) => onMinHexPointsChange(Number(event.target.value))}>
+                        {HEX_MIN_POINTS.map((value) => (
+                          <option key={value} value={value}>
+                            {value}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      <span>{t("dashboard.hex.size")}</span>
+                      <select value={hexSize} onChange={(event) => onHexSizeChange(Number(event.target.value))}>
+                        {HEX_SIZES.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {t(option.key)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </section>
+        ) : null}
 
-        <section className="panel-section">
+        {!isGuest ? <section className="panel-section">
           <div
             className="section-title-row"
             style={{ cursor: "pointer", userSelect: "none" }}
@@ -247,9 +266,9 @@ export function ControlPanel({
               </div>
             </div>
           )}
-        </section>
+        </section> : null}
 
-        <section className="panel-section">
+        {!isGuest ? <section className="panel-section">
           <div
             className="section-title-row"
             style={{ cursor: "pointer", userSelect: "none" }}
@@ -277,9 +296,9 @@ export function ControlPanel({
               </div>
             </div>
           )}
-        </section>
+        </section> : null}
 
-        <section className="panel-section">
+        {!isGuest ? <section className="panel-section">
           <div
             className="section-title-row"
             style={{ cursor: "pointer", userSelect: "none" }}
@@ -306,9 +325,9 @@ export function ControlPanel({
               </div>
             </div>
           )}
-        </section>
+        </section> : null}
 
-        <section className="panel-section">
+        {!isGuest ? <section className="panel-section">
           <div
             className="section-title-row"
             style={{ cursor: "pointer", userSelect: "none" }}
@@ -349,9 +368,9 @@ export function ControlPanel({
               </div>
             </div>
           )}
-        </section>
+        </section> : null}
 
-        <section className="panel-section">
+        {!isGuest ? <section className="panel-section">
           <div
             className="section-title-row"
             style={{ cursor: "pointer", userSelect: "none" }}
@@ -380,7 +399,7 @@ export function ControlPanel({
               </div>
             </div>
           )}
-        </section>
+        </section> : null}
       </aside>
     </>
   );

@@ -9,11 +9,11 @@ import type {
   LeafletMouseEvent,
   Map as LeafletMap,
 } from "leaflet";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { buildFeatureKey, getSignalCategory, getSignalColor } from "@/lib/pings";
 import { useTranslation } from "@/i18n/useTranslation";
-import type { CalculationMode, PingFeature, ViewMode } from "@/lib/types";
+import type { CalculationMode, PingFeature, RestrictedHexagon, ViewMode } from "@/lib/types";
 
 type MarkerWithRssi = CircleMarker & {
   options: CircleMarkerOptions & {
@@ -54,6 +54,7 @@ type LoraWanMapProps = {
   newFeatureKeys: string[];
   hexSize: number;
   minHexPoints: number;
+  restrictedHexagons?: RestrictedHexagon[];
 };
 
 function getPopupHtml(feature: PingFeature, calculationMode: CalculationMode, t: (key: string, vars?: Record<string, string | number>) => string): string {
@@ -92,6 +93,7 @@ export function LoraWanMap({
   newFeatureKeys,
   hexSize,
   minHexPoints,
+  restrictedHexagons = [],
 }: LoraWanMapProps) {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -100,6 +102,7 @@ export function LoraWanMap({
   const dynamicLayersRef = useRef<Layer[]>([]);
   const radarLayerRef = useRef<LayerGroup | null>(null);
   const animatedKeysRef = useRef<Set<string>>(new Set());
+  const [isMapReady, setIsMapReady] = useState(false);
 
   const featureKeySet = useMemo(() => new Set(newFeatureKeys), [newFeatureKeys]);
 
@@ -133,6 +136,7 @@ export function LoraWanMap({
 
       radarLayerRef.current = L.layerGroup().addTo(map);
       mapRef.current = map;
+      setIsMapReady(true);
     }
 
     void initMap();
@@ -143,6 +147,7 @@ export function LoraWanMap({
         mapRef.current.remove();
         mapRef.current = null;
       }
+      setIsMapReady(false);
     };
   }, []);
 
@@ -151,7 +156,7 @@ export function LoraWanMap({
     const L = leafletRef.current;
     const radarLayer = radarLayerRef.current;
 
-    if (!map || !L || !radarLayer) {
+    if (!isMapReady || !map || !L || !radarLayer) {
       return;
     }
 
@@ -290,7 +295,32 @@ export function LoraWanMap({
       }
     }
 
-    if (mode === "hexagon") {
+    if (mode === "hexagon" && restrictedHexagons.length > 0) {
+      const layerGroup = L.layerGroup();
+
+      for (const hexagon of restrictedHexagons) {
+        const polygon = L.polygon(hexagon.corners, {
+          fillColor: hexagon.fillColor,
+          fillOpacity: 0.78,
+          weight: 0.5,
+          color: "#ffffff",
+        }).bindPopup(`
+          <div style="text-align:center;font-family:system-ui,sans-serif;line-height:1.45;">
+            <strong>${t("map.hexagon.title")}</strong><br />
+            <hr style="margin:6px 0;border:0;border-top:1px solid #e5e7eb;" />
+            ${t("map.hexagon.pointAvg", { avg: hexagon.avg })}<br />
+          </div>
+        `);
+            // ${t("map.hexagon.restricted")}
+
+        polygon.addTo(layerGroup);
+      }
+
+      layerGroup.addTo(map);
+      dynamicLayersRef.current.push(layerGroup);
+    }
+
+    if (mode === "hexagon" && restrictedHexagons.length === 0) {
       const aspect = 0.61;
       const dx = hexSize * Math.sqrt(3);
       const dy = hexSize * 1.5 * aspect;
@@ -400,7 +430,7 @@ export function LoraWanMap({
       const [longitude, latitude] = followedFeature.geometry.coordinates;
       map.flyTo([latitude, longitude], 18, { duration: 1.5 });
     }
-  }, [calculationMode, featureKeySet, features, followedFeature, hexSize, minHexPoints, mode, t]);
+  }, [calculationMode, featureKeySet, features, followedFeature, hexSize, isMapReady, minHexPoints, mode, restrictedHexagons, t]);
 
   return <div className="map-canvas" ref={containerRef} />;
 }
