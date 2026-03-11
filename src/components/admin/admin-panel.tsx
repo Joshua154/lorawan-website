@@ -4,7 +4,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { type CreateUserPayload, type ManagedUser, type PingSummary, type SessionUser, type UserRole } from "@/lib/types";
+import {
+  type CreateUserPayload,
+  type ManagedUser,
+  type PingSummary,
+  type SessionUser,
+  type UpdateUserPayload,
+  type UserRole,
+} from "@/lib/types";
 import { useTranslation } from "@/i18n/useTranslation";
 
 type AdminPanelProps = {
@@ -20,6 +27,11 @@ type FormFeedback = {
   message: string;
 };
 
+type UserMutationResponse = {
+  message?: string;
+  user?: ManagedUser;
+};
+
 const DEFAULT_USER_FORM: CreateUserPayload = {
   username: "",
   password: "",
@@ -32,9 +44,17 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
   const [summary, setSummary] = useState<PingSummary | null>(null);
   const [managedUsers, setManagedUsers] = useState<ManagedUser[]>([]);
   const [userForm, setUserForm] = useState<CreateUserPayload>(DEFAULT_USER_FORM);
+  const [editForm, setEditForm] = useState<UpdateUserPayload | null>(null);
+  const [editingUserId, setEditingUserId] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState<"all" | UserRole>("all");
+  const [accountTypeFilter, setAccountTypeFilter] = useState<"all" | "local" | "oauth">("all");
   const [isLoading, setIsLoading] = useState(true);
   const [isSavingUser, setIsSavingUser] = useState(false);
-  const [userFeedback, setUserFeedback] = useState<FormFeedback | null>(null);
+  const [savingUserId, setSavingUserId] = useState<number | null>(null);
+  const [deletingUserId, setDeletingUserId] = useState<number | null>(null);
+  const [createFeedback, setCreateFeedback] = useState<FormFeedback | null>(null);
+  const [managementFeedback, setManagementFeedback] = useState<FormFeedback | null>(null);
 
   const redirectToLogin = useCallback(() => {
     router.push("/login");
@@ -48,9 +68,39 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
     [summary],
   );
 
+  const hasBoards = boardOptions.length > 0;
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+
+  const filteredUsers = useMemo(
+    () =>
+      managedUsers.filter((user) => {
+        const matchesSearch =
+          normalizedSearch.length === 0 ||
+          user.username.toLowerCase().includes(normalizedSearch) ||
+          user.assignedBoardIds.some((boardId) => boardId.toLowerCase().includes(normalizedSearch)) ||
+          (user.oauth_provider ?? "").toLowerCase().includes(normalizedSearch);
+
+        const matchesRole = roleFilter === "all" || user.role === roleFilter;
+        const matchesAccountType = accountTypeFilter === "all" || user.auth_type === accountTypeFilter;
+
+        return matchesSearch && matchesRole && matchesAccountType;
+      }),
+    [accountTypeFilter, managedUsers, normalizedSearch, roleFilter],
+  );
+
+  const userStats = useMemo(
+    () => ({
+      admins: managedUsers.filter((user) => user.role === "admin").length,
+      local: managedUsers.filter((user) => user.auth_type === "local").length,
+      oauth: managedUsers.filter((user) => user.auth_type === "oauth").length,
+    }),
+    [managedUsers],
+  );
+
+  const createDisabled = isSavingUser || isLoading || (userForm.role === "user" && userForm.assignedBoardIds.length === 0);
+
   const loadAdminData = useCallback(async () => {
     setIsLoading(true);
-    setUserFeedback(null);
 
     try {
       const [usersResponse, summaryResponse] = await Promise.all([
@@ -70,7 +120,7 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
       }
 
       if (!usersResponse.ok || !summaryResponse.ok) {
-        setUserFeedback({ kind: "error", message: "Could not load admin data." });
+        setManagementFeedback({ kind: "error", message: "Could not load admin data." });
         return;
       }
 
@@ -79,7 +129,7 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
       setManagedUsers(usersPayload.users);
       setSummary(summaryPayload);
     } catch {
-      setUserFeedback({ kind: "error", message: "Server error while loading admin data." });
+      setManagementFeedback({ kind: "error", message: "Server error while loading admin data." });
     } finally {
       setIsLoading(false);
     }
@@ -94,6 +144,15 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
       ...currentForm,
       assignedBoardIds: currentForm.assignedBoardIds.filter((boardId) => boardOptions.includes(boardId)),
     }));
+
+    setEditForm((currentForm) =>
+      currentForm
+        ? {
+            ...currentForm,
+            assignedBoardIds: currentForm.assignedBoardIds.filter((boardId) => boardOptions.includes(boardId)),
+          }
+        : currentForm,
+    );
   }, [boardOptions]);
 
   const toggleAssignedBoard = (boardId: string) => {
@@ -105,6 +164,36 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
     }));
   };
 
+  const toggleEditBoard = (boardId: string) => {
+    setEditForm((currentForm) => {
+      if (!currentForm) {
+        return currentForm;
+      }
+
+      return {
+        ...currentForm,
+        assignedBoardIds: currentForm.assignedBoardIds.includes(boardId)
+          ? currentForm.assignedBoardIds.filter((currentBoardId) => currentBoardId !== boardId)
+          : [...currentForm.assignedBoardIds, boardId],
+      };
+    });
+  };
+
+  const startEditingUser = (user: ManagedUser) => {
+    setEditingUserId(user.id);
+    setEditForm({
+      username: user.username,
+      role: user.role,
+      assignedBoardIds: user.assignedBoardIds,
+    });
+    setManagementFeedback(null);
+  };
+
+  const cancelEditingUser = () => {
+    setEditingUserId(null);
+    setEditForm(null);
+  };
+
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
     redirectToLogin();
@@ -113,7 +202,8 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
   const handleCreateUser = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setIsSavingUser(true);
-    setUserFeedback(null);
+    setCreateFeedback(null);
+    setManagementFeedback(null);
 
     try {
       const payload: CreateUserPayload = {
@@ -145,17 +235,109 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
       }
 
       if (!response.ok) {
-        setUserFeedback({ kind: "error", message: result.message ?? "Could not create user." });
+        setCreateFeedback({ kind: "error", message: result.message ?? "Could not create user." });
         return;
       }
 
       setUserForm(DEFAULT_USER_FORM);
-      setUserFeedback({ kind: "success", message: "User created." });
+      setCreateFeedback({ kind: "success", message: "User created." });
       await loadAdminData();
     } catch {
-      setUserFeedback({ kind: "error", message: "Server error while creating the user." });
+      setCreateFeedback({ kind: "error", message: "Server error while creating the user." });
     } finally {
       setIsSavingUser(false);
+    }
+  };
+
+  const handleUpdateUser = async (userId: number) => {
+    if (!editForm) {
+      return;
+    }
+
+    setSavingUserId(userId);
+    setManagementFeedback(null);
+
+    try {
+      const payload: UpdateUserPayload = {
+        username: editForm.username.trim(),
+        role: editForm.role,
+        assignedBoardIds:
+          editForm.role === "admin"
+            ? []
+            : [...new Set(editForm.assignedBoardIds)].sort((left, right) => Number(left) - Number(right)),
+      };
+
+      const response = await fetch(`/api/users/${userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const result = (await response.json()) as UserMutationResponse;
+
+      if (response.status === 401) {
+        redirectToLogin();
+        return;
+      }
+
+      if (response.status === 403) {
+        router.push("/");
+        router.refresh();
+        return;
+      }
+
+      if (!response.ok) {
+        setManagementFeedback({ kind: "error", message: result.message ?? "Could not update user." });
+        return;
+      }
+
+      setManagementFeedback({ kind: "success", message: t("admin.users.feedback.updated") });
+      cancelEditingUser();
+      await loadAdminData();
+    } catch {
+      setManagementFeedback({ kind: "error", message: "Server error while updating the user." });
+    } finally {
+      setSavingUserId(null);
+    }
+  };
+
+  const handleDeleteUser = async (user: ManagedUser) => {
+    if (!window.confirm(t("admin.users.delete.confirm", { username: user.username }))) {
+      return;
+    }
+
+    setDeletingUserId(user.id);
+    setManagementFeedback(null);
+
+    try {
+      const response = await fetch(`/api/users/${user.id}`, { method: "DELETE" });
+      const result = (await response.json()) as UserMutationResponse;
+
+      if (response.status === 401) {
+        redirectToLogin();
+        return;
+      }
+
+      if (response.status === 403) {
+        router.push("/");
+        router.refresh();
+        return;
+      }
+
+      if (!response.ok) {
+        setManagementFeedback({ kind: "error", message: result.message ?? "Could not delete user." });
+        return;
+      }
+
+      if (editingUserId === user.id) {
+        cancelEditingUser();
+      }
+
+      setManagementFeedback({ kind: "success", message: t("admin.users.feedback.deleted", { username: user.username }) });
+      await loadAdminData();
+    } catch {
+      setManagementFeedback({ kind: "error", message: "Server error while deleting the user." });
+    } finally {
+      setDeletingUserId(null);
     }
   };
 
@@ -236,26 +418,35 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
               {userForm.role === "user" ? (
                 <div className="admin-board-picker">
                   <span>{t("admin.boards.title")}</span>
-                  <div className="admin-board-grid">
-                    {boardOptions.map((boardId) => (
-                      <label key={boardId}>
-                        <input
-                          checked={userForm.assignedBoardIds.includes(boardId)}
-                          onChange={() => toggleAssignedBoard(boardId)}
-                          type="checkbox"
-                        />
-                        <span>{t("admin.boards.boardLabel", { id: boardId })}</span>
-                      </label>
-                    ))}
-                  </div>
+                  {hasBoards ? (
+                    <>
+                      <div className="admin-board-grid">
+                        {boardOptions.map((boardId) => (
+                          <label key={boardId}>
+                            <input
+                              checked={userForm.assignedBoardIds.includes(boardId)}
+                              onChange={() => toggleAssignedBoard(boardId)}
+                              type="checkbox"
+                            />
+                            <span>{t("admin.boards.boardLabel", { id: boardId })}</span>
+                          </label>
+                        ))}
+                      </div>
+                      <p className="helper-text">
+                        {t("admin.boards.selectedCount", { count: userForm.assignedBoardIds.length })}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="helper-text">{t("admin.boards.empty")}</p>
+                  )}
                 </div>
               ) : (
                 <p className="helper-text">{t("admin.boards.helper")}</p>
               )}
 
-              {userFeedback ? <p className={`form-message ${userFeedback.kind}`}>{userFeedback.message}</p> : null}
+              {createFeedback ? <p className={`form-message ${createFeedback.kind}`}>{createFeedback.message}</p> : null}
 
-              <button className="primary-button" disabled={isSavingUser || isLoading} type="submit">
+              <button className="primary-button" disabled={createDisabled} type="submit">
                 {isSavingUser ? t("admin.users.form.submitting") : t("admin.users.form.submit")}
               </button>
             </form>
@@ -304,26 +495,254 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
             </button>
           </div>
 
-          {userFeedback?.kind === "error" && isLoading ? (
-            <p className="form-message error">{userFeedback.message}</p>
+          <div className="admin-user-stats">
+            <article>
+              <span>{t("admin.users.stats.total")}</span>
+              <strong>{managedUsers.length}</strong>
+            </article>
+            <article>
+              <span>{t("admin.users.stats.admins")}</span>
+              <strong>{userStats.admins}</strong>
+            </article>
+            <article>
+              <span>{t("admin.users.stats.local")}</span>
+              <strong>{userStats.local}</strong>
+            </article>
+            <article>
+              <span>{t("admin.users.stats.oauth")}</span>
+              <strong>{userStats.oauth}</strong>
+            </article>
+          </div>
+
+          <div className="admin-user-filters">
+            <label>
+              <span>{t("admin.users.filters.searchLabel")}</span>
+              <input
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder={t("admin.users.filters.searchPlaceholder")}
+                type="search"
+                value={searchQuery}
+              />
+            </label>
+
+            <label>
+              <span>{t("admin.users.filters.roleLabel")}</span>
+              <select onChange={(event) => setRoleFilter(event.target.value as "all" | UserRole)} value={roleFilter}>
+                <option value="all">{t("admin.users.filters.allRoles")}</option>
+                <option value="admin">{t("common.roles.admin")}</option>
+                <option value="user">{t("common.roles.user")}</option>
+              </select>
+            </label>
+
+            <label>
+              <span>{t("admin.users.filters.accountTypeLabel")}</span>
+              <select
+                onChange={(event) => setAccountTypeFilter(event.target.value as "all" | "local" | "oauth")}
+                value={accountTypeFilter}
+              >
+                <option value="all">{t("admin.users.filters.allAccountTypes")}</option>
+                <option value="local">{t("admin.users.list.accountType.local")}</option>
+                <option value="oauth">{t("admin.users.filters.oauthOnly")}</option>
+              </select>
+            </label>
+          </div>
+
+          <div className="admin-user-results-bar">
+            <p className="helper-text">{t("admin.users.list.results", { count: filteredUsers.length })}</p>
+            {(searchQuery || roleFilter !== "all" || accountTypeFilter !== "all") ? (
+              <button
+                className="secondary-button"
+                onClick={() => {
+                  setSearchQuery("");
+                  setRoleFilter("all");
+                  setAccountTypeFilter("all");
+                }}
+                type="button"
+              >
+                {t("admin.users.filters.clear")}
+              </button>
+            ) : null}
+          </div>
+
+          {managementFeedback ? (
+            <p className={`form-message ${managementFeedback.kind}`}>{managementFeedback.message}</p>
           ) : null}
 
           <div className="admin-user-list">
-            {managedUsers.map((user) => (
-              <article className="admin-user-row" key={user.id}>
-                <div>
-                  <><strong>{user.username}</strong> - {user.auth_type === "oauth" ? t("admin.users.list.accountType.oauth", { provider: user.oauth_provider ?? "" }) : t("admin.users.list.accountType.local")}</>
-                  <p>
-                    {user.role === "admin"
-                      ? t("common.roles.admin") + " - " + t("admin.boards.helper")
-                      : user.assignedBoardIds.length > 0
-                        ? t("admin.boards.assigned", { list: user.assignedBoardIds.join(", ") })
-                        : t("admin.boards.none")}
-                  </p>
-                </div>
-                <span className={`role-badge ${user.role}`}>{user.role}</span>
+            {filteredUsers.length === 0 ? (
+              <article className="admin-empty-state">
+                <strong>{t("admin.users.empty.title")}</strong>
+                <p>{t("admin.users.empty.description")}</p>
               </article>
-            ))}
+            ) : null}
+
+            {filteredUsers.map((user) => {
+              const isEditing = editingUserId === user.id && editForm;
+
+              return (
+                <article className={`admin-user-row${isEditing ? " editing" : ""}`} key={user.id}>
+                  {isEditing ? (
+                    <>
+                      <div className="admin-user-editor">
+                        <div className="admin-user-heading">
+                          <strong>{t("admin.users.editor.title", { username: user.username })}</strong>
+                          <span className="admin-user-meta-text">
+                            {user.auth_type === "oauth"
+                              ? t("admin.users.list.accountType.oauth", { provider: user.oauth_provider ?? "" })
+                              : t("admin.users.list.accountType.local")}
+                          </span>
+                        </div>
+
+                        <label>
+                          <span>{t("common.form.username")}</span>
+                          <input
+                            onChange={(event) =>
+                              setEditForm((currentForm) =>
+                                currentForm ? { ...currentForm, username: event.target.value } : currentForm,
+                              )
+                            }
+                            required
+                            type="text"
+                            value={editForm.username}
+                          />
+                        </label>
+
+                        <label>
+                          <span>{t("common.form.role")}</span>
+                          <select
+                            disabled={user.id === viewer.id}
+                            onChange={(event) =>
+                              setEditForm((currentForm) =>
+                                currentForm
+                                  ? {
+                                      ...currentForm,
+                                      role: event.target.value as UserRole,
+                                      assignedBoardIds:
+                                        event.target.value === "admin" ? [] : currentForm.assignedBoardIds,
+                                    }
+                                  : currentForm,
+                              )
+                            }
+                            value={editForm.role}
+                          >
+                            <option value="user">{t("common.roles.user")}</option>
+                            <option value="admin">{t("common.roles.admin")}</option>
+                          </select>
+                        </label>
+
+                        {editForm.role === "user" ? (
+                          <div className="admin-board-picker">
+                            <span>{t("admin.boards.title")}</span>
+                            {hasBoards ? (
+                              <>
+                                <div className="admin-board-grid">
+                                  {boardOptions.map((boardId) => (
+                                    <label key={`${user.id}-${boardId}`}>
+                                      <input
+                                        checked={editForm.assignedBoardIds.includes(boardId)}
+                                        onChange={() => toggleEditBoard(boardId)}
+                                        type="checkbox"
+                                      />
+                                      <span>{t("admin.boards.boardLabel", { id: boardId })}</span>
+                                    </label>
+                                  ))}
+                                </div>
+                                <p className="helper-text">
+                                  {t("admin.boards.selectedCount", { count: editForm.assignedBoardIds.length })}
+                                </p>
+                              </>
+                            ) : (
+                              <p className="helper-text">{t("admin.boards.empty")}</p>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="helper-text">{t("admin.boards.helper")}</p>
+                        )}
+
+                        {user.id === viewer.id ? <p className="helper-text">{t("admin.users.list.selfProtected")}</p> : null}
+                      </div>
+
+                      <div className="admin-user-actions">
+                        <span className={`role-badge ${editForm.role}`}>{editForm.role}</span>
+                        <button
+                          className="primary-button"
+                          disabled={
+                            savingUserId === user.id ||
+                            deletingUserId === user.id ||
+                            (editForm.role === "user" && editForm.assignedBoardIds.length === 0)
+                          }
+                          onClick={() => void handleUpdateUser(user.id)}
+                          type="button"
+                        >
+                          {savingUserId === user.id ? t("admin.users.list.saving") : t("common.actions.save")}
+                        </button>
+                        <button className="secondary-button" onClick={cancelEditingUser} type="button">
+                          {t("common.actions.cancel")}
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="admin-user-main">
+                        <div className="admin-user-heading">
+                          <strong>{user.username}</strong>
+                          <span className="admin-user-meta-text">
+                            {user.auth_type === "oauth"
+                              ? t("admin.users.list.accountType.oauth", { provider: user.oauth_provider ?? "" })
+                              : t("admin.users.list.accountType.local")}
+                          </span>
+                        </div>
+
+                        <div className="admin-user-meta-row">
+                          <span className="admin-meta-pill">
+                            {t("admin.users.list.createdAt", {
+                              date: new Date(user.createdAt).toLocaleDateString(),
+                            })}
+                          </span>
+                          <span className="admin-meta-pill">
+                            {t("admin.users.list.boardCount", { count: user.assignedBoardIds.length })}
+                          </span>
+                        </div>
+
+                        {user.role === "admin" ? (
+                          <p>{t("admin.boards.helper")}</p>
+                        ) : user.assignedBoardIds.length > 0 ? (
+                          <div className="admin-inline-board-list">
+                            {user.assignedBoardIds.map((boardId) => (
+                              <span className="admin-board-chip subtle" key={`${user.id}-${boardId}`}>
+                                {t("admin.boards.boardLabel", { id: boardId })}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <p>{t("admin.boards.none")}</p>
+                        )}
+                      </div>
+
+                      <div className="admin-user-actions">
+                        <span className={`role-badge ${user.role}`}>{user.role}</span>
+                        <button
+                          className="secondary-button"
+                          disabled={Boolean(savingUserId || deletingUserId)}
+                          onClick={() => startEditingUser(user)}
+                          type="button"
+                        >
+                          {t("common.actions.edit")}
+                        </button>
+                        <button
+                          className="secondary-button danger-button"
+                          disabled={user.id === viewer.id || Boolean(savingUserId || deletingUserId)}
+                          onClick={() => void handleDeleteUser(user)}
+                          type="button"
+                        >
+                          {deletingUserId === user.id ? t("admin.users.list.deleting") : t("common.actions.delete")}
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </article>
+              );
+            })}
           </div>
         </section>
       </section>

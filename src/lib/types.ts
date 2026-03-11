@@ -77,6 +77,12 @@ export type CreateUserPayload = {
   assignedBoardIds: string[];
 };
 
+export type UpdateUserPayload = {
+  username: string;
+  role: UserRole;
+  assignedBoardIds: string[];
+};
+
 export type AuthenticatedDatasetResponse = {
   accessMode: "authenticated";
   collection: PingFeatureCollection;

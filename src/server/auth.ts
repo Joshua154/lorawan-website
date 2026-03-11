@@ -1,7 +1,8 @@
 import { compareSync, hashSync } from "bcryptjs";
 import { cookies } from "next/headers";
+import type { PoolClient } from "pg";
 
-import type { CreateUserPayload, ManagedUser, SessionUser, UserRole } from "@/lib/types";
+import type { CreateUserPayload, ManagedUser, SessionUser, UpdateUserPayload, UserRole } from "@/lib/types";
 import { query, withTransaction } from "@/server/database";
 
 const SESSION_COOKIE_NAME = "lorawan_session";
@@ -33,6 +34,10 @@ type BoardRow = {
   board_id: string;
 };
 
+type QueryableClient = {
+  query: PoolClient["query"];
+};
+
 function toIsoString(value: string | Date): string {
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 }
@@ -50,24 +55,23 @@ function normalizeBoardIds(boardIds: string[]): string[] {
   });
 }
 
-async function getAssignedBoardIds(userId: number): Promise<string[]> {
-  const { rows } = await query<BoardRow>(
-    "SELECT board_id FROM user_boards WHERE user_id = $1 ORDER BY board_id ASC",
-    [userId],
-  );
+async function getAssignedBoardIds(userId: number, client?: QueryableClient): Promise<string[]> {
+  const executor = client ?? { query };
+  const { rows } = await executor.query<BoardRow>("SELECT board_id FROM user_boards WHERE user_id = $1 ORDER BY board_id ASC", [userId]);
 
   return rows.map((row) => String(row.board_id));
 }
 
 async function mapUser(
   row: Pick<UserRow, "id" | "username" | "role" | "created_at" | "auth_type" | "oauth_provider" | "oauth_subject">,
+  client?: QueryableClient,
 ): Promise<ManagedUser> {
   return {
     id: row.id,
     username: row.username,
     role: row.role,
     createdAt: toIsoString(row.created_at),
-    assignedBoardIds: row.role === "admin" ? [] : await getAssignedBoardIds(row.id),
+    assignedBoardIds: row.role === "admin" ? [] : await getAssignedBoardIds(row.id, client),
     auth_type: row.auth_type,
     oauth_provider: row.oauth_provider,
     oauth_subject: row.oauth_subject,
@@ -110,6 +114,30 @@ function validateNewUserPayload(payload: CreateUserPayload): { role: UserRole; a
   }
 
   return {
+    role,
+    assignedBoardIds: role === "admin" ? [] : assignedBoardIds,
+  };
+}
+
+function validateManagedUserPayload(payload: UpdateUserPayload): { username: string; role: UserRole; assignedBoardIds: string[] } {
+  const username = payload.username.trim();
+  const role = payload.role;
+  const assignedBoardIds = normalizeBoardIds(payload.assignedBoardIds);
+
+  if (username.length < 3) {
+    throw new Error("Username must contain at least 3 characters.");
+  }
+
+  if (role !== "admin" && role !== "user") {
+    throw new Error("Invalid role.");
+  }
+
+  if (role === "user" && assignedBoardIds.length === 0) {
+    throw new Error("Regular users need at least one assigned board.");
+  }
+
+  return {
+    username,
     role,
     assignedBoardIds: role === "admin" ? [] : assignedBoardIds,
   };
@@ -289,6 +317,75 @@ export async function createUser(payload: CreateUserPayload): Promise<ManagedUse
       await client.query("INSERT INTO user_boards (user_id, board_id) VALUES ($1, $2)", [created.id, boardId]);
     }
 
-    return mapUser(created);
+    return mapUser(created, client);
   });
+}
+
+export async function updateUser(actorId: number, userId: number, payload: UpdateUserPayload): Promise<ManagedUser> {
+  if (!Number.isInteger(userId) || userId <= 0) {
+    throw new Error("Invalid user id.");
+  }
+
+  const { username, role, assignedBoardIds } = validateManagedUserPayload(payload);
+
+  if (actorId === userId && role !== "admin") {
+    throw new Error("You cannot remove your own admin access.");
+  }
+
+  return withTransaction(async (client) => {
+    const existingResult = await client.query<Pick<UserRow, "id" | "username" | "role" | "created_at" | "auth_type" | "oauth_provider" | "oauth_subject">>(
+      `SELECT id, username, role, created_at, auth_type, oauth_provider, oauth_subject
+       FROM users
+       WHERE id = $1`,
+      [userId],
+    );
+    const existing = existingResult.rows[0];
+
+    if (!existing) {
+      throw new Error("User not found.");
+    }
+
+    const duplicateResult = await client.query<{ id: number }>(
+      `SELECT id
+       FROM users
+       WHERE id <> $1 AND username = $2 AND auth_type = $3`,
+      [userId, username, existing.auth_type],
+    );
+
+    if (duplicateResult.rows[0]) {
+      throw new Error("A user with this username already exists.");
+    }
+
+    const updatedResult = await client.query<Pick<UserRow, "id" | "username" | "role" | "created_at" | "auth_type" | "oauth_provider" | "oauth_subject">>(
+      `UPDATE users
+       SET username = $1, role = $2
+       WHERE id = $3
+       RETURNING id, username, role, created_at, auth_type, oauth_provider, oauth_subject`,
+      [username, role, userId],
+    );
+
+    await client.query("DELETE FROM user_boards WHERE user_id = $1", [userId]);
+
+    for (const boardId of assignedBoardIds) {
+      await client.query("INSERT INTO user_boards (user_id, board_id) VALUES ($1, $2)", [userId, boardId]);
+    }
+
+    return mapUser(updatedResult.rows[0], client);
+  });
+}
+
+export async function deleteUser(actorId: number, userId: number): Promise<void> {
+  if (!Number.isInteger(userId) || userId <= 0) {
+    throw new Error("Invalid user id.");
+  }
+
+  if (actorId === userId) {
+    throw new Error("You cannot delete your own account.");
+  }
+
+  const result = await query<{ id: number }>("DELETE FROM users WHERE id = $1 RETURNING id", [userId]);
+
+  if (!result.rows[0]) {
+    throw new Error("User not found.");
+  }
 }
