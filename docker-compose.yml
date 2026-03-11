@@ -1,12 +1,27 @@
-version: "3.9"
-
 services:
-  lora-map:
-    build: .
-    container_name: lora-map
-    ports:
-      - "4000:4000"
-    volumes:
-      # Verknüpft den lokalen Ordner "data" mit dem Ordner im Container
-      - ./data:/app/data
+  lorawan-dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lorawan-dashboard
     restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      # Persists the user sessions / auth database and pings map data
+      - lorawan_data:/app/data
+    environment:
+      - NODE_ENV=production
+      
+      # Optional: Override the initial default credentials
+      # - LORAWAN_ADMIN_USERNAME=admin
+      # - LORAWAN_ADMIN_PASSWORD=admin1234
+      
+      # Optional: Define standard origin to ensure tight request security limits
+      # - APP_URL=https://your-dashboard-domain.com
+
+      # Optional: Provide a custom log pull URL
+      # - LORAWAN_LOG_URL=http://stadtrandelfen.dsmynas.org:8008/test/2026_gps.log
+
+volumes:
+  lorawan_data:
