@@ -2,7 +2,7 @@ FROM node:20-alpine AS base
 
 # 1. Install dependencies only when needed
 FROM base AS deps
-# Install python and build tools for better-sqlite3 native compilation
+# Install build tools for optional legacy SQLite migration support.
 RUN apk add --no-cache libc6-compat python3 make g++
 WORKDIR /app
 
@@ -29,14 +29,15 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN addgroup -g 1001 -S nodejs
 RUN adduser -S nextjs -u 1001
 
-# Create the data directory and ensure proper permissions for the Next.js user
+# Create the data directory and ensure proper permissions for optional legacy imports
 RUN mkdir -p /app/data && chown nextjs:nodejs /app/data
 
-# We aren't doing STANDALONE output here gracefully out of the box, 
-# so we preserve the standard Node modules and start script to reliably run SQLite.
+# We aren't doing STANDALONE output here gracefully out of the box,
+# so we preserve the standard Node modules and start script.
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder --chown=nextjs:nodejs /app/.next ./.next
+COPY --from=builder --chown=nextjs:nodejs /app/data ./data
 
 # Safely copy the public directory if it exists
 COPY --from=builder /app/public* ./public/
