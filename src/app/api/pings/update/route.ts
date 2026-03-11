@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { getCurrentUser } from "@/server/auth";
+import { requireAuthenticatedUser } from "@/server/api-auth";
 import { runRemoteUpdate } from "@/server/ping-service";
 import { ensureTrustedOrigin } from "@/server/request-security";
 
@@ -13,10 +13,10 @@ async function handleUpdate(request: NextRequest) {
     return originError;
   }
 
-  const user = await getCurrentUser();
+  const auth = await requireAuthenticatedUser();
 
-  if (!user) {
-    return NextResponse.json({ message: "Unauthorized." }, { status: 401 });
+  if ("response" in auth) {
+    return auth.response;
   }
 
   const result = await runRemoteUpdate();

@@ -1,6 +1,6 @@
 {
-    "common.form.username": "Username",
-    "common.form.password": "Password",
+    "common.form.username": "Benutzername",
+    "common.form.password": "Passwort",
     "common.form.role": "Role",
     "common.roles.admin": "Admin",
     "common.roles.user": "User",
@@ -12,8 +12,8 @@
     "common.actions.save": "Speichern",
     "common.actions.cancel": "Abbrechen",
 
-    "auth.login.actions.submit": "Sign in",
-    "auth.login.actions.submitting": "Signing in...",
+    "auth.login.actions.submit": "Anmelden",
+    "auth.login.actions.submitting": "Anmeldung läuft...",
     "auth.login.errors.missingFields": "Username und Passwort werden benötigt.",
     "auth.login.errors.failed": "Login fehlgeschlagen.",
     "auth.login.errors.serverUnavailable": "Der Server ist derzeit nicht verfügbar.",
@@ -150,5 +150,11 @@
     "map.hexagon.realAverage": "Real Ø:",
     "map.hexagon.effectiveAverage": "Effektiv Ø:",
     "map.hexagon.pointAvg": "Ø: {avg} dBm",
-    "map.hexagon.restricted": "Eingeschränkte Gastansicht"
+    "map.hexagon.restricted": "Eingeschränkte Gastansicht",
+
+    "login.title": "LoRaWAN Dashboard",
+    "login.heading": "Anmelden",
+    "login.copy": "Admins können alle Boards verwalten und Nutzer anlegen. Reguläre Nutzer sehen nur ihre zugewiesenen Boards.",
+    "login.divider": "oder",
+    "login.sign.keycloak": "Anmelden mit Keycloak"
 }

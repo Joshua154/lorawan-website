@@ -1,13 +1,12 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { AUTO_REFRESH_SECONDS, DEFAULT_HEX_MIN_POINTS, DEFAULT_HEX_SIZE, EMPTY_COLLECTION, buildFeatureKey, formatTimestamp, getSignalCategory, getStabilityCategory, isValidCoordinate, summarizeCollection, sortFeatures } from "@/lib/pings";
+import { extractManualPings } from "@/lib/ping-import";
 import type {
   CalculationMode,
   DatasetResponse,
-  PingFeature,
   PingFeatureCollection,
   PingSummary,
   RestrictedHexagon,
@@ -16,10 +15,13 @@ import type {
   StabilityCategory,
   ViewMode,
 } from "@/lib/types";
+import { mergeSelectableOptions, sortNumericStrings, toggleStringSelection } from "@/lib/users";
 import { ControlPanel } from "@/components/dashboard/control-panel";
 import { TimelineControls } from "@/components/dashboard/timeline-controls";
 import { LoraWanMap } from "@/components/map/lorawan-map";
+import { Modal } from "@/components/ui/modal";
 import { useTranslation } from "@/i18n/useTranslation";
+import { useSessionActions } from "@/hooks/use-session-actions";
 
 type RangeState = {
   start: number;
@@ -35,8 +37,8 @@ const DEFAULT_SIGNAL_CATEGORIES: SignalCategory[] = ["good", "medium", "bad", "d
 const DEFAULT_STABILITY_CATEGORIES: StabilityCategory[] = ["0", "unregular", "good", "stable"];
 
 export function DashboardShell({ viewer }: DashboardShellProps) {
-  const router = useRouter();
   const { t } = useTranslation();
+  const { logout, redirectToLogin } = useSessionActions();
   const isGuest = viewer === null;
   const isAdmin = viewer?.role === "admin";
   const [collection, setCollection] = useState<PingFeatureCollection>(EMPTY_COLLECTION);
@@ -76,7 +78,7 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
   const boardCounts = useMemo(() => summary.boardCounts, [summary.boardCounts]);
   const gatewayCounts = useMemo(() => summary.gatewayCounts, [summary.gatewayCounts]);
   const boardOptions = useMemo(
-    () => Object.keys(boardCounts).sort((left, right) => Number(left) - Number(right)),
+    () => sortNumericStrings(Object.keys(boardCounts)),
     [boardCounts],
   );
   const gatewayOptions = useMemo(
@@ -126,20 +128,6 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
     const endLabel = formatTimestamp(sortedFeatures[range.end]?.properties.time);
     return t("dashboard.range.fromTo", { start: startLabel, end: endLabel });
   }, [range.end, range.start, sortedFeatures, t]);
-
-  const mergeSelections = useCallback((options: string[], previous: string[] | null, known: string[]) => {
-    if (previous === null || (previous.length === 0 && known.length === 0)) {
-      return options;
-    }
-
-    const previousSet = new Set(previous);
-    return options.filter((option) => previousSet.has(option) || !known.includes(option));
-  }, []);
-
-  const redirectToLogin = useCallback(() => {
-    router.push("/login");
-    router.refresh();
-  }, [router]);
 
   const fetchDataset = useCallback(async (checkForNew = false) => {
     const searchParams = new URLSearchParams();
@@ -214,15 +202,15 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
 
   useEffect(() => {
     const knownBoards = knownBoardsRef.current;
-    setSelectedBoards((previous) => mergeSelections(boardOptions, previous, knownBoards));
+    setSelectedBoards((previous) => mergeSelectableOptions(boardOptions, previous, knownBoards));
     knownBoardsRef.current = boardOptions;
-  }, [boardOptions, mergeSelections]);
+  }, [boardOptions]);
 
   useEffect(() => {
     const knownGateways = knownGatewaysRef.current;
-    setSelectedGateways((previous) => mergeSelections(gatewayOptions, previous, knownGateways));
+    setSelectedGateways((previous) => mergeSelectableOptions(gatewayOptions, previous, knownGateways));
     knownGatewaysRef.current = gatewayOptions;
-  }, [gatewayOptions, mergeSelections]);
+  }, [gatewayOptions]);
 
   useEffect(() => {
     if (!isPlaying) {
@@ -297,18 +285,14 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
   const toggleBoard = (boardId: string) => {
     setSelectedBoards((previous) => {
       const currentSelection = previous ?? boardOptions;
-      return currentSelection.includes(boardId)
-        ? currentSelection.filter((item) => item !== boardId)
-        : [...currentSelection, boardId];
+      return toggleStringSelection(currentSelection, boardId);
     });
   };
 
   const toggleGateway = (gateway: string) => {
     setSelectedGateways((previous) => {
       const currentSelection = previous ?? gatewayOptions;
-      return currentSelection.includes(gateway)
-        ? currentSelection.filter((item) => item !== gateway)
-        : [...currentSelection, gateway];
+      return toggleStringSelection(currentSelection, gateway);
     });
   };
 
@@ -337,11 +321,6 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
       setRange((currentRange) => ({ ...currentRange, end: currentRange.start }));
     }
     setIsPlaying((currentValue) => !currentValue);
-  };
-
-  const handleLogout = async () => {
-    await fetch("/api/auth/logout", { method: "POST" });
-    redirectToLogin();
   };
 
   const readFromBoard = async () => {
@@ -413,57 +392,7 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
   };
 
   const processEepromData = async (data: string) => {
-    const lines = data.split("\n");
-    const extractedPings: PingFeature[] = [];
-    let detectedBoardId = 0;
-
-    for (const line of lines) {
-      if (line.startsWith("BoardID:")) {
-        detectedBoardId = Number(line.split(":")[1]);
-      }
-    }
-
-    for (const line of lines) {
-      if (!line.includes(";") || line.includes("Counter")) {
-        continue;
-      }
-
-      const [counter, longitude, latitude] = line.trim().split(";");
-      const parsedCounter = Number(counter);
-      const parsedLongitude = Number(longitude);
-      const parsedLatitude = Number(latitude);
-
-      if (!(parsedLatitude > 52 && parsedLatitude < 53 && parsedLongitude > 12 && parsedLongitude < 14)) {
-        continue;
-      }
-
-      const duplicate = sortedFeatures.some((feature) => {
-        const [featureLongitude, featureLatitude] = feature.geometry.coordinates;
-        return (
-          String(feature.properties.boardID) === String(detectedBoardId) &&
-          Number(feature.properties.counter) === parsedCounter &&
-          featureLongitude.toFixed(6) === parsedLongitude.toFixed(6) &&
-          featureLatitude.toFixed(6) === parsedLatitude.toFixed(6)
-        );
-      });
-
-      if (!duplicate) {
-        extractedPings.push({
-          type: "Feature",
-          geometry: {
-            type: "Point",
-            coordinates: [parsedLongitude, parsedLatitude],
-          },
-          properties: {
-            boardID: detectedBoardId,
-            counter: parsedCounter,
-            time: new Date().toISOString(),
-            rssi: -1,
-            gateway: t("map.sources.offlineImport"),
-          },
-        });
-      }
-    }
+    const extractedPings = extractManualPings(data, sortedFeatures, t("map.sources.offlineImport"));
 
     if (extractedPings.length === 0) {
       window.alert(t("dashboard.import.noNewPoints"));
@@ -539,7 +468,7 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
         selectedGateways={selectedGateways}
         selectedStability={selectedStability}
         statusMessage={statusMessage}
-        handleLogout={handleLogout}
+        handleLogout={logout}
         isAdmin={Boolean(isAdmin)}
       />
 
@@ -572,68 +501,42 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
         ) : null}
       </section>
 
-      {bonusInfoOpen ? (
-        <div className="modal-overlay" onClick={() => setBonusInfoOpen(false)}>
-          <div className="modal-card" onClick={(event) => event.stopPropagation()}>
-            <button className="close-button" onClick={() => setBonusInfoOpen(false)} type="button">
-              ×
-            </button>
-            <h3>{t("dashboard.help.bonus.title")}</h3>
-            <p>{t("dashboard.help.bonus.description")}</p>
-            <ul>
-                {[5, 4, 3, 2, 1].map((bonus) => (
-              <li key={bonus}>{t(`dashboard.help.bonus.tiers.${bonus}`)}</li>
-                ))}
-            </ul>
-          </div>
-        </div>
-      ) : null}
+      <Modal onClose={() => setBonusInfoOpen(false)} open={bonusInfoOpen} title={t("dashboard.help.bonus.title")}>
+        <p>{t("dashboard.help.bonus.description")}</p>
+        <ul>
+          {[5, 4, 3, 2, 1].map((bonus) => (
+            <li key={bonus}>{t(`dashboard.help.bonus.tiers.${bonus}`)}</li>
+          ))}
+        </ul>
+      </Modal>
 
-      {importModalOpen ? (
-        <div className="modal-overlay" onClick={() => setImportModalOpen(false)}>
-          <div className="modal-card" onClick={(event) => event.stopPropagation()}>
-            <button className="close-button" onClick={() => setImportModalOpen(false)} type="button">
-              x
-            </button>
-            <h3>{t("dashboard.import.modal.title")}</h3>
-            <ol>
-                {[1, 2, 3, 4].map((bonus) => (
-                <li key={bonus}>{t(`dashboard.import.modal.steps.${bonus}`)}</li>
-                ))}
-            </ol>
-            <div className="modal-actions">
-              <button className="primary-button" onClick={() => void readFromBoard()} type="button">
-                {t("dashboard.import.modal.readBoard")}
-              </button>
-              <button className="secondary-button" onClick={() => setDriverInfoOpen(true)} type="button">
-                {t("dashboard.import.modal.driverInfo")}
-              </button>
-            </div>
-          </div>
+      <Modal closeIcon="x" onClose={() => setImportModalOpen(false)} open={importModalOpen} title={t("dashboard.import.modal.title")}>
+        <ol>
+          {[1, 2, 3, 4].map((step) => (
+            <li key={step}>{t(`dashboard.import.modal.steps.${step}`)}</li>
+          ))}
+        </ol>
+        <div className="modal-actions">
+          <button className="primary-button" onClick={() => void readFromBoard()} type="button">
+            {t("dashboard.import.modal.readBoard")}
+          </button>
+          <button className="secondary-button" onClick={() => setDriverInfoOpen(true)} type="button">
+            {t("dashboard.import.modal.driverInfo")}
+          </button>
         </div>
-      ) : null}
+      </Modal>
 
-      {driverInfoOpen ? (
-        <div className="modal-overlay" onClick={() => setDriverInfoOpen(false)}>
-          <div className="modal-card" onClick={(event) => event.stopPropagation()}>
-            <button className="close-button" onClick={() => setDriverInfoOpen(false)} type="button">
-              x
-            </button>
-            <h3>{t("dashboard.help.driver.title")}</h3>
-            <p>
-              {t("dashboard.help.driver.description")}
-            </p>
-            <a
-              className="text-link"
-              href="https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads"
-              rel="noreferrer"
-              target="_blank"
-            >
-              {t("dashboard.help.driver.linkText")}
-            </a>
-          </div>
-        </div>
-      ) : null}
+      <Modal closeIcon="x" onClose={() => setDriverInfoOpen(false)} open={driverInfoOpen} title={t("dashboard.help.driver.title")}>
+        <p>{t("dashboard.help.driver.description")}</p>
+        <a
+          className="text-link"
+          href="https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads"
+          rel="noreferrer"
+          target="_blank"
+        >
+          {t("dashboard.help.driver.linkText")}
+        </a>
+      </Modal>
     </main>
   );
 }

@@ -1,20 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import type { CreateUserPayload } from "@/lib/types";
-import { createUser, getCurrentUser, listUsers } from "@/server/auth";
+import { createUser, listUsers } from "@/server/auth";
+import { requireAdminUser } from "@/server/api-auth";
 import { ensureJsonRequest, ensureTrustedOrigin } from "@/server/request-security";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const user = await getCurrentUser();
+  const auth = await requireAdminUser();
 
-  if (!user) {
-    return NextResponse.json({ message: "Unauthorized." }, { status: 401 });
-  }
-
-  if (user.role !== "admin") {
-    return NextResponse.json({ message: "Forbidden." }, { status: 403 });
+  if ("response" in auth) {
+    return auth.response;
   }
 
   return NextResponse.json({ users: await listUsers() });
@@ -33,14 +30,10 @@ export async function POST(request: NextRequest) {
     return jsonError;
   }
 
-  const user = await getCurrentUser();
+  const auth = await requireAdminUser();
 
-  if (!user) {
-    return NextResponse.json({ message: "Unauthorized." }, { status: 401 });
-  }
-
-  if (user.role !== "admin") {
-    return NextResponse.json({ message: "Forbidden." }, { status: 403 });
+  if ("response" in auth) {
+    return auth.response;
   }
 
   try {

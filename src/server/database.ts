@@ -1,40 +1,9 @@
-import { existsSync, readFileSync } from "node:fs";
-import path from "node:path";
-
 import { hashSync } from "bcryptjs";
 import { Pool, type PoolClient, type QueryResult, type QueryResultRow } from "pg";
 
-import type { PingFeature, PingFeatureCollection } from "@/lib/types";
-
-const DATA_DIRECTORY = path.join(process.cwd(), "data");
-const LEGACY_DATABASE_FILE = path.join(DATA_DIRECTORY, "lorawan-auth.db");
-const LEGACY_PINGS_FILE = path.join(DATA_DIRECTORY, "pings.geojson");
+import type { PingFeature } from "@/lib/types";
 const DEFAULT_ADMIN_USERNAME = process.env.LORAWAN_ADMIN_USERNAME?.trim() || "admin";
 const DEFAULT_ADMIN_PASSWORD = process.env.LORAWAN_ADMIN_PASSWORD?.trim() || "admin1234";
-
-type LegacyUserRow = {
-  id: number;
-  username: string;
-  password_hash: string;
-  role: "admin" | "user";
-  created_at: string;
-  auth_type?: "local" | "oauth";
-  oauth_provider?: string | null;
-  oauth_subject?: string | null;
-  type?: string | null;
-};
-
-type LegacyUserBoardRow = {
-  user_id: number;
-  board_id: string;
-};
-
-type LegacySessionRow = {
-  id: string;
-  user_id: number;
-  expires_at: string;
-  created_at: string;
-};
 
 type LegacyPingRecord = {
   board_id: string;
@@ -129,28 +98,6 @@ async function createTables(client: Pool | PoolClient): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_ping_features_observed_at ON ping_features (observed_at);
     CREATE INDEX IF NOT EXISTS idx_ping_features_board_counter ON ping_features (board_id, counter);
   `);
-}
-
-function mapLegacyUser(row: LegacyUserRow): LegacyUserRow {
-  if (row.auth_type) {
-    return {
-      ...row,
-      auth_type: row.auth_type,
-      oauth_provider: row.oauth_provider ?? null,
-      oauth_subject: row.oauth_subject ?? null,
-    };
-  }
-
-  const legacyType = row.type?.trim() || "local";
-  const isLocal = legacyType === "local";
-
-  return {
-    ...row,
-    password_hash: isLocal ? row.password_hash : "",
-    auth_type: isLocal ? "local" : "oauth",
-    oauth_provider: isLocal ? null : legacyType,
-    oauth_subject: isLocal ? null : row.username,
-  };
 }
 
 async function insertPingRecords(client: Pool | PoolClient, records: LegacyPingRecord[]): Promise<void> {

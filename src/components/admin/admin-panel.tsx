@@ -1,18 +1,32 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { BoardSelector } from "@/components/admin/board-selector";
+import { FormMessage } from "@/components/ui/form-message";
+import { RoleBadge } from "@/components/ui/role-badge";
 import {
   type CreateUserPayload,
   type ManagedUser,
   type PingSummary,
   type SessionUser,
   type UpdateUserPayload,
-  type UserRole,
 } from "@/lib/types";
+import {
+  DEFAULT_CREATE_USER_FORM,
+  type UserAccountTypeFilter,
+  type UserRoleFilter,
+  filterExistingSelections,
+  filterManagedUsers,
+  getManagedUserStats,
+  sortNumericStrings,
+  toCreateUserPayload,
+  toUpdateUserPayload,
+  toggleStringSelection,
+} from "@/lib/users";
 import { useTranslation } from "@/i18n/useTranslation";
+import { useSessionActions } from "@/hooks/use-session-actions";
 
 type AdminPanelProps = {
   viewer: SessionUser;
@@ -32,23 +46,15 @@ type UserMutationResponse = {
   user?: ManagedUser;
 };
 
-const DEFAULT_USER_FORM: CreateUserPayload = {
-  username: "",
-  password: "",
-  role: "user",
-  assignedBoardIds: [],
-};
-
 export function AdminPanel({ viewer }: AdminPanelProps) {
-  const router = useRouter();
   const [summary, setSummary] = useState<PingSummary | null>(null);
   const [managedUsers, setManagedUsers] = useState<ManagedUser[]>([]);
-  const [userForm, setUserForm] = useState<CreateUserPayload>(DEFAULT_USER_FORM);
+  const [userForm, setUserForm] = useState<CreateUserPayload>(DEFAULT_CREATE_USER_FORM);
   const [editForm, setEditForm] = useState<UpdateUserPayload | null>(null);
   const [editingUserId, setEditingUserId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [roleFilter, setRoleFilter] = useState<"all" | UserRole>("all");
-  const [accountTypeFilter, setAccountTypeFilter] = useState<"all" | "local" | "oauth">("all");
+  const [roleFilter, setRoleFilter] = useState<UserRoleFilter>("all");
+  const [accountTypeFilter, setAccountTypeFilter] = useState<UserAccountTypeFilter>("all");
   const [isLoading, setIsLoading] = useState(true);
   const [isSavingUser, setIsSavingUser] = useState(false);
   const [savingUserId, setSavingUserId] = useState<number | null>(null);
@@ -56,46 +62,22 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
   const [createFeedback, setCreateFeedback] = useState<FormFeedback | null>(null);
   const [managementFeedback, setManagementFeedback] = useState<FormFeedback | null>(null);
 
-  const redirectToLogin = useCallback(() => {
-    router.push("/login");
-    router.refresh();
-  }, [router]);
-
   const { t } = useTranslation();
+  const { logout, redirectHome, redirectToLogin } = useSessionActions();
 
   const boardOptions = useMemo(
-    () => Object.keys(summary?.boardCounts ?? {}).sort((left, right) => Number(left) - Number(right)),
+    () => sortNumericStrings(Object.keys(summary?.boardCounts ?? {})),
     [summary],
   );
 
   const hasBoards = boardOptions.length > 0;
-  const normalizedSearch = searchQuery.trim().toLowerCase();
 
   const filteredUsers = useMemo(
-    () =>
-      managedUsers.filter((user) => {
-        const matchesSearch =
-          normalizedSearch.length === 0 ||
-          user.username.toLowerCase().includes(normalizedSearch) ||
-          user.assignedBoardIds.some((boardId) => boardId.toLowerCase().includes(normalizedSearch)) ||
-          (user.oauth_provider ?? "").toLowerCase().includes(normalizedSearch);
-
-        const matchesRole = roleFilter === "all" || user.role === roleFilter;
-        const matchesAccountType = accountTypeFilter === "all" || user.auth_type === accountTypeFilter;
-
-        return matchesSearch && matchesRole && matchesAccountType;
-      }),
-    [accountTypeFilter, managedUsers, normalizedSearch, roleFilter],
+    () => filterManagedUsers(managedUsers, { searchQuery, roleFilter, accountTypeFilter }),
+    [accountTypeFilter, managedUsers, roleFilter, searchQuery],
   );
 
-  const userStats = useMemo(
-    () => ({
-      admins: managedUsers.filter((user) => user.role === "admin").length,
-      local: managedUsers.filter((user) => user.auth_type === "local").length,
-      oauth: managedUsers.filter((user) => user.auth_type === "oauth").length,
-    }),
-    [managedUsers],
-  );
+  const userStats = useMemo(() => getManagedUserStats(managedUsers), [managedUsers]);
 
   const createDisabled = isSavingUser || isLoading || (userForm.role === "user" && userForm.assignedBoardIds.length === 0);
 
@@ -114,8 +96,7 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
       }
 
       if (usersResponse.status === 403 || summaryResponse.status === 403) {
-        router.push("/");
-        router.refresh();
+        redirectHome();
         return;
       }
 
@@ -133,7 +114,7 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [redirectToLogin, router]);
+  }, [redirectHome, redirectToLogin]);
 
   useEffect(() => {
     void loadAdminData();
@@ -142,14 +123,14 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
   useEffect(() => {
     setUserForm((currentForm) => ({
       ...currentForm,
-      assignedBoardIds: currentForm.assignedBoardIds.filter((boardId) => boardOptions.includes(boardId)),
+      assignedBoardIds: filterExistingSelections(currentForm.assignedBoardIds, boardOptions),
     }));
 
     setEditForm((currentForm) =>
       currentForm
         ? {
             ...currentForm,
-            assignedBoardIds: currentForm.assignedBoardIds.filter((boardId) => boardOptions.includes(boardId)),
+            assignedBoardIds: filterExistingSelections(currentForm.assignedBoardIds, boardOptions),
           }
         : currentForm,
     );
@@ -158,9 +139,7 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
   const toggleAssignedBoard = (boardId: string) => {
     setUserForm((currentForm) => ({
       ...currentForm,
-      assignedBoardIds: currentForm.assignedBoardIds.includes(boardId)
-        ? currentForm.assignedBoardIds.filter((currentBoardId) => currentBoardId !== boardId)
-        : [...currentForm.assignedBoardIds, boardId],
+      assignedBoardIds: toggleStringSelection(currentForm.assignedBoardIds, boardId),
     }));
   };
 
@@ -172,9 +151,7 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
 
       return {
         ...currentForm,
-        assignedBoardIds: currentForm.assignedBoardIds.includes(boardId)
-          ? currentForm.assignedBoardIds.filter((currentBoardId) => currentBoardId !== boardId)
-          : [...currentForm.assignedBoardIds, boardId],
+        assignedBoardIds: toggleStringSelection(currentForm.assignedBoardIds, boardId),
       };
     });
   };
@@ -194,11 +171,6 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
     setEditForm(null);
   };
 
-  const handleLogout = async () => {
-    await fetch("/api/auth/logout", { method: "POST" });
-    redirectToLogin();
-  };
-
   const handleCreateUser = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setIsSavingUser(true);
@@ -206,15 +178,7 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
     setManagementFeedback(null);
 
     try {
-      const payload: CreateUserPayload = {
-        ...userForm,
-        username: userForm.username.trim(),
-        password: userForm.password,
-        assignedBoardIds:
-          userForm.role === "admin"
-            ? []
-            : [...new Set(userForm.assignedBoardIds)].sort((left, right) => Number(left) - Number(right)),
-      };
+      const payload = toCreateUserPayload(userForm);
 
       const response = await fetch("/api/users", {
         method: "POST",
@@ -229,8 +193,7 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
       }
 
       if (response.status === 403) {
-        router.push("/");
-        router.refresh();
+        redirectHome();
         return;
       }
 
@@ -239,7 +202,7 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
         return;
       }
 
-      setUserForm(DEFAULT_USER_FORM);
+      setUserForm(DEFAULT_CREATE_USER_FORM);
       setCreateFeedback({ kind: "success", message: "User created." });
       await loadAdminData();
     } catch {
@@ -258,14 +221,7 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
     setManagementFeedback(null);
 
     try {
-      const payload: UpdateUserPayload = {
-        username: editForm.username.trim(),
-        role: editForm.role,
-        assignedBoardIds:
-          editForm.role === "admin"
-            ? []
-            : [...new Set(editForm.assignedBoardIds)].sort((left, right) => Number(left) - Number(right)),
-      };
+      const payload = toUpdateUserPayload(editForm);
 
       const response = await fetch(`/api/users/${userId}`, {
         method: "PATCH",
@@ -280,8 +236,7 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
       }
 
       if (response.status === 403) {
-        router.push("/");
-        router.refresh();
+        redirectHome();
         return;
       }
 
@@ -318,8 +273,7 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
       }
 
       if (response.status === 403) {
-        router.push("/");
-        router.refresh();
+        redirectHome();
         return;
       }
 
@@ -356,7 +310,7 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
               <Link className="secondary-button nav-link-button" href="/">
                 {t("admin.navigation.backToDashboard")}
               </Link>
-              <button className="secondary-button" onClick={() => void handleLogout()} type="button">
+              <button className="secondary-button" onClick={() => void logout()} type="button">
                 {t("common.actions.logout")}
               </button>
             </div>
@@ -404,7 +358,7 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
                   onChange={(event) =>
                     setUserForm((currentForm) => ({
                       ...currentForm,
-                      role: event.target.value as UserRole,
+                      role: event.target.value as CreateUserPayload["role"],
                       assignedBoardIds: event.target.value === "admin" ? [] : currentForm.assignedBoardIds,
                     }))
                   }
@@ -416,35 +370,21 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
               </label>
 
               {userForm.role === "user" ? (
-                <div className="admin-board-picker">
-                  <span>{t("admin.boards.title")}</span>
-                  {hasBoards ? (
-                    <>
-                      <div className="admin-board-grid">
-                        {boardOptions.map((boardId) => (
-                          <label key={boardId}>
-                            <input
-                              checked={userForm.assignedBoardIds.includes(boardId)}
-                              onChange={() => toggleAssignedBoard(boardId)}
-                              type="checkbox"
-                            />
-                            <span>{t("admin.boards.boardLabel", { id: boardId })}</span>
-                          </label>
-                        ))}
-                      </div>
-                      <p className="helper-text">
-                        {t("admin.boards.selectedCount", { count: userForm.assignedBoardIds.length })}
-                      </p>
-                    </>
-                  ) : (
-                    <p className="helper-text">{t("admin.boards.empty")}</p>
-                  )}
-                </div>
+                <BoardSelector
+                  boardLabel={(boardId) => t("admin.boards.boardLabel", { id: boardId })}
+                  boardOptions={boardOptions}
+                  emptyLabel={t("admin.boards.empty")}
+                  hasBoards={hasBoards}
+                  onToggle={toggleAssignedBoard}
+                  selectedBoardIds={userForm.assignedBoardIds}
+                  selectedCountLabel={t("admin.boards.selectedCount", { count: userForm.assignedBoardIds.length })}
+                  title={t("admin.boards.title")}
+                />
               ) : (
                 <p className="helper-text">{t("admin.boards.helper")}</p>
               )}
 
-              {createFeedback ? <p className={`form-message ${createFeedback.kind}`}>{createFeedback.message}</p> : null}
+              <FormMessage feedback={createFeedback} />
 
               <button className="primary-button" disabled={createDisabled} type="submit">
                 {isSavingUser ? t("admin.users.form.submitting") : t("admin.users.form.submit")}
@@ -564,9 +504,7 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
             ) : null}
           </div>
 
-          {managementFeedback ? (
-            <p className={`form-message ${managementFeedback.kind}`}>{managementFeedback.message}</p>
-          ) : null}
+          <FormMessage feedback={managementFeedback} />
 
           <div className="admin-user-list">
             {filteredUsers.length === 0 ? (
@@ -616,7 +554,7 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
                                 currentForm
                                   ? {
                                       ...currentForm,
-                                      role: event.target.value as UserRole,
+                                      role: event.target.value as UpdateUserPayload["role"],
                                       assignedBoardIds:
                                         event.target.value === "admin" ? [] : currentForm.assignedBoardIds,
                                     }
@@ -631,30 +569,16 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
                         </label>
 
                         {editForm.role === "user" ? (
-                          <div className="admin-board-picker">
-                            <span>{t("admin.boards.title")}</span>
-                            {hasBoards ? (
-                              <>
-                                <div className="admin-board-grid">
-                                  {boardOptions.map((boardId) => (
-                                    <label key={`${user.id}-${boardId}`}>
-                                      <input
-                                        checked={editForm.assignedBoardIds.includes(boardId)}
-                                        onChange={() => toggleEditBoard(boardId)}
-                                        type="checkbox"
-                                      />
-                                      <span>{t("admin.boards.boardLabel", { id: boardId })}</span>
-                                    </label>
-                                  ))}
-                                </div>
-                                <p className="helper-text">
-                                  {t("admin.boards.selectedCount", { count: editForm.assignedBoardIds.length })}
-                                </p>
-                              </>
-                            ) : (
-                              <p className="helper-text">{t("admin.boards.empty")}</p>
-                            )}
-                          </div>
+                          <BoardSelector
+                            boardLabel={(boardId) => t("admin.boards.boardLabel", { id: boardId })}
+                            boardOptions={boardOptions}
+                            emptyLabel={t("admin.boards.empty")}
+                            hasBoards={hasBoards}
+                            onToggle={toggleEditBoard}
+                            selectedBoardIds={editForm.assignedBoardIds}
+                            selectedCountLabel={t("admin.boards.selectedCount", { count: editForm.assignedBoardIds.length })}
+                            title={t("admin.boards.title")}
+                          />
                         ) : (
                           <p className="helper-text">{t("admin.boards.helper")}</p>
                         )}
@@ -663,7 +587,7 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
                       </div>
 
                       <div className="admin-user-actions">
-                        <span className={`role-badge ${editForm.role}`}>{editForm.role}</span>
+                        <RoleBadge label={editForm.role} role={editForm.role} />
                         <button
                           className="primary-button"
                           disabled={
@@ -720,7 +644,7 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
                       </div>
 
                       <div className="admin-user-actions">
-                        <span className={`role-badge ${user.role}`}>{user.role}</span>
+                        <RoleBadge label={user.role} role={user.role} />
                         <button
                           className="secondary-button"
                           disabled={Boolean(savingUserId || deletingUserId)}

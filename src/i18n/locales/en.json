@@ -150,5 +150,11 @@
 	"map.hexagon.realAverage": "Real avg:",
 	"map.hexagon.effectiveAverage": "Effective avg:",
     "map.hexagon.pointAvg": "Avg: {avg} dBm",
-	"map.hexagon.restricted": "Restricted guest view"
+	"map.hexagon.restricted": "Restricted guest view",
+
+	"login.title": "LoRaWAN Dashboard",
+	"login.heading": "Sign in",
+	"login.copy": "Admins can manage all boards and create users. Regular users only see their assigned boards.",
+	"login.divider": "or",
+	"login.sign.keycloak": "Sign in with Keycloak"
 }

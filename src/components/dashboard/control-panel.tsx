@@ -3,7 +3,10 @@
 import type { CalculationMode, SignalCategory, StabilityCategory, ViewMode } from "@/lib/types";
 import Link from "next/link";
 import { useState } from "react";
+import { CollapsibleSection } from "@/components/ui/collapsible-section";
+import { RoleBadge } from "@/components/ui/role-badge";
 import { useTranslation } from "@/i18n/useTranslation";
+import { sortNumericStrings } from "@/lib/users";
 
 type ControlPanelProps = {
   canImport: boolean;
@@ -115,9 +118,10 @@ export function ControlPanel({
       <aside className={`control-panel ${menuOpen ? "is-open" : ""}`}>
         <div className="panel-header">
           <div>
-            <p className="eyebrow">LoRaWAN<span className={`role-badge ${isAdmin ? "admin" : "user"}`}>
-              {roleLabel}
-            </span></p>
+            <p className="eyebrow">
+              LoRaWAN
+              <RoleBadge className="inline" label={roleLabel} role={isAdmin ? "admin" : "user"} />
+            </p>
             <h1>{t("dashboard.panel.heading")}</h1>
             {isGuest ? <p className="helper-text">{t("dashboard.guest.notice")}</p> : null}
           </div>
@@ -148,258 +152,206 @@ export function ControlPanel({
           </div>
         </div>
 
-        {!isGuest || true ? <div className="status-card">
+        <div className="status-card">
           <div>
             <span className="status-label">{t("dashboard.status.autoUpdate")}</span>
             <strong>{isUpdating ? t("dashboard.status.running") : t("dashboard.status.inSeconds", { count: countdown })}</strong>
           </div>
           <span className={`status-pill ${isUpdating ? "busy" : "ready"}`}>{statusMessage || t("dashboard.status.ready")}</span>
-        </div> : null}
+        </div>
 
         {!isGuest ? (
-          <section className="panel-section">
-            <div
-              className="section-title-row"
-              style={{ cursor: "pointer", userSelect: "none" }}
-              onClick={() => toggleSection("display")}
-            >
-              <h2 style={{ margin: 0 }}>{t("dashboard.display.title")}</h2>
-              <span style={{ fontSize: "0.8rem", color: "var(--muted)" }}>
-                {collapsedSections["display"] ? "▼" : "▲"}
-              </span>
-            </div>
-            {!collapsedSections["display"] && (
-              <div style={{ marginTop: "0.85rem" }}>
-                {isGuest ? (
-                  <p className="helper-text">{t("dashboard.guest.hexagonOnly")}</p>
-                ) : (
-                  <div className="stacked-options">
-                    {[
-                      ["markers", t("dashboard.display.modes.markers")],
-                      ["heatmap", t("dashboard.display.modes.heatmap")],
-                      ["hexagon", t("dashboard.display.modes.hexagon")],
-                    ].map(([value, label]) => (
-                      <label key={value}>
-                        <input
-                          checked={mode === value}
-                          name="mode"
-                          onChange={() => onModeChange(value as ViewMode)}
-                          type="radio"
-                        />
-                        <span>{label}</span>
-                      </label>
-                    ))}
-                  </div>
-                )}
-                {mode === "hexagon" ? (
-                  <div className="sub-grid" style={{ marginTop: "0.65rem" }}>
-                    <label>
-                      <span>{t("dashboard.hex.minPoints")}</span>
-                      <select value={minHexPoints} onChange={(event) => onMinHexPointsChange(Number(event.target.value))}>
-                        {HEX_MIN_POINTS.map((value) => (
-                          <option key={value} value={value}>
-                            {value}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      <span>{t("dashboard.hex.size")}</span>
-                      <select value={hexSize} onChange={(event) => onHexSizeChange(Number(event.target.value))}>
-                        {HEX_SIZES.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {t(option.key)}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  </div>
-                ) : null}
+          <CollapsibleSection
+            collapsed={Boolean(collapsedSections["display"])}
+            onToggle={() => toggleSection("display")}
+            title={<h2 style={{ margin: 0 }}>{t("dashboard.display.title")}</h2>}
+          >
+            {isGuest ? (
+              <p className="helper-text">{t("dashboard.guest.hexagonOnly")}</p>
+            ) : (
+              <div className="stacked-options">
+                {[
+                  ["markers", t("dashboard.display.modes.markers")],
+                  ["heatmap", t("dashboard.display.modes.heatmap")],
+                  ["hexagon", t("dashboard.display.modes.hexagon")],
+                ].map(([value, label]) => (
+                  <label key={value}>
+                    <input
+                      checked={mode === value}
+                      name="mode"
+                      onChange={() => onModeChange(value as ViewMode)}
+                      type="radio"
+                    />
+                    <span>{label}</span>
+                  </label>
+                ))}
               </div>
             )}
-          </section>
+            {mode === "hexagon" ? (
+              <div className="sub-grid" style={{ marginTop: "0.65rem" }}>
+                <label>
+                  <span>{t("dashboard.hex.minPoints")}</span>
+                  <select value={minHexPoints} onChange={(event) => onMinHexPointsChange(Number(event.target.value))}>
+                    {HEX_MIN_POINTS.map((value) => (
+                      <option key={value} value={value}>
+                        {value}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span>{t("dashboard.hex.size")}</span>
+                  <select value={hexSize} onChange={(event) => onHexSizeChange(Number(event.target.value))}>
+                    {HEX_SIZES.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {t(option.key)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            ) : null}
+          </CollapsibleSection>
         ) : null}
 
-        {!isGuest ? <section className="panel-section">
-          <div
-            className="section-title-row"
-            style={{ cursor: "pointer", userSelect: "none" }}
-            onClick={() => toggleSection("calculation")}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-              <h2 style={{ margin: 0 }}>{t("dashboard.calculation.title")}</h2>
+        {!isGuest ? (
+          <CollapsibleSection
+            collapsed={Boolean(collapsedSections["calculation"])}
+            onToggle={() => toggleSection("calculation")}
+            title={<h2 style={{ margin: 0 }}>{t("dashboard.calculation.title")}</h2>}
+            titleAccessory={
               <button
                 className="help-button"
-                onClick={(e) => {
-                  e.stopPropagation();
+                onClick={(event) => {
+                  event.stopPropagation();
                   onShowBonusInfo();
                 }}
-                type="button"
                 style={{ width: "1.5rem", height: "1.5rem", fontSize: "0.8rem", padding: 0 }}
+                type="button"
               >
                 ?
               </button>
+            }
+          >
+            <div className="stacked-options compact">
+              <label>
+                <input
+                  checked={calculationMode === "stabilized"}
+                  onChange={() => onCalculationModeChange("stabilized")}
+                  type="radio"
+                />
+                <span>{t("dashboard.calculation.withBonus")}</span>
+              </label>
+              <label>
+                <input
+                  checked={calculationMode === "raw"}
+                  onChange={() => onCalculationModeChange("raw")}
+                  type="radio"
+                />
+                <span>{t("dashboard.calculation.withoutBonus")}</span>
+              </label>
             </div>
-            <span style={{ fontSize: "0.8rem", color: "var(--muted)" }}>
-              {collapsedSections["calculation"] ? "▼" : "▲"}
-            </span>
-          </div>
-          {!collapsedSections["calculation"] && (
-            <div style={{ marginTop: "0.85rem" }}>
-              <div className="stacked-options compact">
-                <label>
+          </CollapsibleSection>
+        ) : null}
+
+        {!isGuest ? (
+          <CollapsibleSection
+            collapsed={Boolean(collapsedSections["quality"])}
+            onToggle={() => toggleSection("quality")}
+            title={<h2 style={{ margin: 0 }}>{t("dashboard.quality.title")}</h2>}
+          >
+            <div className="stacked-options compact">
+              {CATEGORY_OPTIONS.map((option) => (
+                <label key={option.value}>
                   <input
-                    checked={calculationMode === "stabilized"}
-                    onChange={() => onCalculationModeChange("stabilized")}
-                    type="radio"
+                    checked={selectedCategories.includes(option.value)}
+                    onChange={() => onToggleCategory(option.value)}
+                    type="checkbox"
                   />
-                  <span>{t("dashboard.calculation.withBonus")}</span>
+                  <span className="legend-dot" style={{ backgroundColor: option.color }} />
+                  <span>{t(option.key)}</span>
                 </label>
-                <label>
+              ))}
+            </div>
+          </CollapsibleSection>
+        ) : null}
+
+        {!isGuest ? (
+          <CollapsibleSection
+            collapsed={Boolean(collapsedSections["stability"])}
+            onToggle={() => toggleSection("stability")}
+            title={<h2 style={{ margin: 0 }}>{t("dashboard.stability.title")}</h2>}
+          >
+            <div className="stacked-options compact">
+              {STABILITY_OPTIONS.map((option) => (
+                <label key={option.value}>
                   <input
-                    checked={calculationMode === "raw"}
-                    onChange={() => onCalculationModeChange("raw")}
-                    type="radio"
+                    checked={selectedStability.includes(option.value)}
+                    onChange={() => onToggleStability(option.value)}
+                    type="checkbox"
                   />
-                  <span>{t("dashboard.calculation.withoutBonus")}</span>
+                  <span>{t(option.key)}</span>
                 </label>
-              </div>
+              ))}
             </div>
-          )}
-        </section> : null}
+          </CollapsibleSection>
+        ) : null}
 
-        {!isGuest ? <section className="panel-section">
-          <div
-            className="section-title-row"
-            style={{ cursor: "pointer", userSelect: "none" }}
-            onClick={() => toggleSection("quality")}
+        {!isGuest ? (
+          <CollapsibleSection
+            collapsed={Boolean(collapsedSections["boards"])}
+            onToggle={() => toggleSection("boards")}
+            title={<h2 style={{ margin: 0 }}>{t("dashboard.filters.boardsTitle")}</h2>}
           >
-            <h2 style={{ margin: 0 }}>{t("dashboard.quality.title")}</h2>
-            <span style={{ fontSize: "0.8rem", color: "var(--muted)" }}>
-              {collapsedSections["quality"] ? "▼" : "▲"}
-            </span>
-          </div>
-          {!collapsedSections["quality"] && (
-            <div style={{ marginTop: "0.85rem" }}>
-              <div className="stacked-options compact">
-                {CATEGORY_OPTIONS.map((option) => (
-                  <label key={option.value}>
-                    <input
-                      checked={selectedCategories.includes(option.value)}
-                      onChange={() => onToggleCategory(option.value)}
-                      type="checkbox"
-                    />
-                    <span className="legend-dot" style={{ backgroundColor: option.color }} />
-                    <span>{t(option.key)}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          )}
-        </section> : null}
-
-        {!isGuest ? <section className="panel-section">
-          <div
-            className="section-title-row"
-            style={{ cursor: "pointer", userSelect: "none" }}
-            onClick={() => toggleSection("stability")}
-          >
-            <h2 style={{ margin: 0 }}>{t("dashboard.stability.title")}</h2>
-            <span style={{ fontSize: "0.8rem", color: "var(--muted)" }}>
-              {collapsedSections["stability"] ? "▼" : "▲"}
-            </span>
-          </div>
-          {!collapsedSections["stability"] && (
-            <div style={{ marginTop: "0.85rem" }}>
-              <div className="stacked-options compact">
-                {STABILITY_OPTIONS.map((option) => (
-                  <label key={option.value}>
-                    <input
-                      checked={selectedStability.includes(option.value)}
-                      onChange={() => onToggleStability(option.value)}
-                      type="checkbox"
-                    />
-                    <span>{t(option.key)}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          )}
-        </section> : null}
-
-        {!isGuest ? <section className="panel-section">
-          <div
-            className="section-title-row"
-            style={{ cursor: "pointer", userSelect: "none" }}
-            onClick={() => toggleSection("boards")}
-          >
-            <h2 style={{ margin: 0 }}>{t("dashboard.filters.boardsTitle")}</h2>
-            <span style={{ fontSize: "0.8rem", color: "var(--muted)" }}>
-              {collapsedSections["boards"] ? "▼" : "▲"}
-            </span>
-          </div>
-          {!collapsedSections["boards"] && (
-            <div style={{ marginTop: "0.85rem" }}>
-              <div className="filter-list">
-                {Object.keys(boardCounts)
-                  .sort((left, right) => Number(left) - Number(right))
-                  .map((boardId) => {
-                    const following = followedBoardId === boardId;
-                    return (
-                      <div className="filter-row" key={boardId}>
-                        <label>
-                          <input
-                            checked={selectedBoards === null || selectedBoards.includes(boardId)}
-                            onChange={() => onToggleBoard(boardId)}
-                            type="checkbox"
-                          />
-                          <span>{t("dashboard.filters.boardLabel", { id: boardId, count: boardCounts[boardId] })}</span>
-                        </label>
-                        <button
-                          className={`follow-button ${following ? "active" : ""}`}
-                          onClick={() => onFollowBoard(boardId)}
-                          type="button"
-                        >
-                          🎯
-                        </button>
-                      </div>
-                    );
-                  })}
-              </div>
-            </div>
-          )}
-        </section> : null}
-
-        {!isGuest ? <section className="panel-section">
-          <div
-            className="section-title-row"
-            style={{ cursor: "pointer", userSelect: "none" }}
-            onClick={() => toggleSection("gateways")}
-          >
-            <h2 style={{ margin: 0 }}>{t("dashboard.filters.gatewaysTitle")}</h2>
-            <span style={{ fontSize: "0.8rem", color: "var(--muted)" }}>
-              {collapsedSections["gateways"] ? "▼" : "▲"}
-            </span>
-          </div>
-          {!collapsedSections["gateways"] && (
-            <div style={{ marginTop: "0.85rem" }}>
-              <div className="filter-list gateways">
-                {Object.keys(gatewayCounts)
-                  .sort((left, right) => left.localeCompare(right))
-                  .map((gateway) => (
-                    <label key={gateway} title={gateway}>
+            <div className="filter-list">
+              {sortNumericStrings(Object.keys(boardCounts)).map((boardId) => {
+                const following = followedBoardId === boardId;
+                return (
+                  <div className="filter-row" key={boardId}>
+                    <label>
                       <input
-                        checked={selectedGateways === null || selectedGateways.includes(gateway)}
-                        onChange={() => onToggleGateway(gateway)}
+                        checked={selectedBoards === null || selectedBoards.includes(boardId)}
+                        onChange={() => onToggleBoard(boardId)}
                         type="checkbox"
                       />
-                      <span>{t("dashboard.filters.gatewayLabel", { gateway, count: gatewayCounts[gateway] })}</span>
+                      <span>{t("dashboard.filters.boardLabel", { id: boardId, count: boardCounts[boardId] })}</span>
                     </label>
-                  ))}
-              </div>
+                    <button
+                      className={`follow-button ${following ? "active" : ""}`}
+                      onClick={() => onFollowBoard(boardId)}
+                      type="button"
+                    >
+                      🎯
+                    </button>
+                  </div>
+                );
+              })}
             </div>
-          )}
-        </section> : null}
+          </CollapsibleSection>
+        ) : null}
+
+        {!isGuest ? (
+          <CollapsibleSection
+            collapsed={Boolean(collapsedSections["gateways"])}
+            onToggle={() => toggleSection("gateways")}
+            title={<h2 style={{ margin: 0 }}>{t("dashboard.filters.gatewaysTitle")}</h2>}
+          >
+            <div className="filter-list gateways">
+              {Object.keys(gatewayCounts)
+                .sort((left, right) => left.localeCompare(right))
+                .map((gateway) => (
+                  <label key={gateway} title={gateway}>
+                    <input
+                      checked={selectedGateways === null || selectedGateways.includes(gateway)}
+                      onChange={() => onToggleGateway(gateway)}
+                      type="checkbox"
+                    />
+                    <span>{t("dashboard.filters.gatewayLabel", { gateway, count: gatewayCounts[gateway] })}</span>
+                  </label>
+                ))}
+            </div>
+          </CollapsibleSection>
+        ) : null}
       </aside>
     </>
   );
