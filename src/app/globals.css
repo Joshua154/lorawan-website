@@ -70,6 +70,32 @@ label {
   display: none;
 }
 
+.language-switcher {
+  position: fixed;
+  top: 1rem;
+  left: 1rem;
+  z-index: 30;
+  border: 1px solid var(--border);
+  border-radius: 0.9rem;
+  background: var(--surface);
+  backdrop-filter: blur(12px);
+  box-shadow: var(--shadow);
+  padding: 0.25rem 0.5rem;
+}
+
+.language-switcher select {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-weight: 600;
+  padding: 0.35rem 0.25rem;
+  cursor: pointer;
+}
+
+.leaflet-top .leaflet-control {
+  margin-top: 77px !important;
+}
+
 .control-panel {
   position: absolute;
   top: 1.25rem;

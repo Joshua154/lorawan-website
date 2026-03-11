@@ -1,5 +1,8 @@
 import type { Metadata, Viewport } from "next";
 
+import { LanguageSwitcher } from "@/components/i18n/language-switcher";
+import { TranslationProvider } from "@/i18n/useTranslation";
+
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -32,7 +35,10 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           rel="stylesheet"
           href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css"
         />
-        {children}
+        <TranslationProvider>
+          <LanguageSwitcher />
+          {children}
+        </TranslationProvider>
       </body>
     </html>
   );
