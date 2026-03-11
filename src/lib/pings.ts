@@ -1,7 +1,9 @@
 import type {
+  CalculationMode,
   PingFeature,
   PingFeatureCollection,
   PingSummary,
+  RestrictedHexagon,
   SignalCategory,
   StabilityCategory,
 } from "@/lib/types";
@@ -14,7 +16,7 @@ export const SIGNAL_COLORS: Record<SignalCategory, string> = {
 };
 
 export const AUTO_REFRESH_SECONDS = 59;
-export const DEFAULT_HEX_SIZE = 0.0008;
+export const DEFAULT_HEX_SIZE = 0.0035;
 export const DEFAULT_HEX_MIN_POINTS = 1;
 export const EMPTY_COLLECTION: PingFeatureCollection = {
   type: "FeatureCollection",
@@ -131,4 +133,113 @@ export function summarizeCollection(collection: PingFeatureCollection): PingSumm
     earliestTimestamp: sorted[0]?.properties.time ?? null,
     latestTimestamp: sorted.at(-1)?.properties.time ?? null,
   };
+}
+
+export function buildRestrictedHexagons(
+  features: PingFeature[],
+  {
+    hexSize,
+    minHexPoints,
+    calculationMode = "stabilized",
+  }: { hexSize: number; minHexPoints: number; calculationMode?: CalculationMode },
+): RestrictedHexagon[] {
+  const aspect = 0.61;
+  const dx = hexSize * Math.sqrt(3);
+  const dy = hexSize * 1.5 * aspect;
+  const bins = new Map<string, { points: PingFeature[]; center: [number, number] }>();
+
+  for (const feature of features) {
+    if (!isValidCoordinate(feature.geometry.coordinates)) {
+      continue;
+    }
+
+    const [longitude, latitude] = feature.geometry.coordinates;
+    const row = Math.round(latitude / dy);
+    const offset = row % 2 === 0 ? 0 : dx / 2;
+    const col = Math.round((longitude - offset) / dx);
+    const key = `${col},${row}`;
+
+    if (!bins.has(key)) {
+      bins.set(key, { points: [], center: [row * dy, col * dx + offset] });
+    }
+
+    bins.get(key)?.points.push(feature);
+  }
+
+  const hexagons: RestrictedHexagon[] = [];
+
+  for (const [, bin] of bins) {
+    if (bin.points.length < minHexPoints) {
+      continue;
+    }
+
+    let red = 0;
+    let green = 0;
+    let blue = 0;
+    let totalWeight = 0;
+
+    const bestRssi = Math.max(
+      ...bin.points.map((feature) => {
+        const value =
+          calculationMode === "stabilized"
+            ? feature.properties.rssi_stabilized ?? feature.properties.rssi
+            : feature.properties.rssi;
+
+        return value === -1 ? -130 : value;
+      }),
+    );
+
+    for (const feature of bin.points) {
+      const weightedRssi =
+        calculationMode === "stabilized"
+          ? (feature.properties.rssi_stabilized ?? feature.properties.rssi)
+          : feature.properties.rssi;
+      const safeWeightedRssi = weightedRssi === -1 ? -130 : weightedRssi;
+      const category = getSignalCategory(
+        feature.properties.rssi,
+        calculationMode === "stabilized" ? feature.properties.rssi_stabilized : undefined,
+      );
+      const color = getSignalColor(category);
+      const weight = safeWeightedRssi === bestRssi ? 5 : 1;
+      totalWeight += weight;
+
+      if (color === "#2e7d32") {
+        red += 46 * weight;
+        green += 125 * weight;
+        blue += 50 * weight;
+      } else if (color === "#f59e0b") {
+        red += 245 * weight;
+        green += 158 * weight;
+        blue += 11 * weight;
+      } else if (color === "#dc2626") {
+        red += 220 * weight;
+        green += 38 * weight;
+        blue += 38 * weight;
+      }
+    }
+
+    const corners: [number, number][] = [];
+    for (let index = 0; index < 6; index += 1) {
+      const angle = (Math.PI / 3) * index + Math.PI / 6;
+      corners.push([
+        bin.center[0] + hexSize * Math.sin(angle) * aspect,
+        bin.center[1] + hexSize * Math.cos(angle),
+      ]);
+    }
+
+    hexagons.push({
+      corners,
+      avg: +((bin.points.reduce((sum, feature) => {
+        const value =
+          calculationMode === "stabilized"
+            ? feature.properties.rssi_stabilized ?? feature.properties.rssi
+            : feature.properties.rssi;
+
+        return sum + (value === -1 ? -130 : value);
+      }, 0) / bin.points.length) || 0).toFixed(0),
+      fillColor: `rgb(${Math.round(red / totalWeight || 0)}, ${Math.round(green / totalWeight || 0)}, ${Math.round(blue / totalWeight || 0)})`,
+    });
+  }
+
+  return hexagons;
 }

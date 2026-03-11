@@ -10,6 +10,7 @@ import type {
   PingFeature,
   PingFeatureCollection,
   PingSummary,
+  RestrictedHexagon,
   SessionUser,
   SignalCategory,
   StabilityCategory,
@@ -26,7 +27,7 @@ type RangeState = {
 };
 
 type DashboardShellProps = {
-  viewer: SessionUser;
+  viewer: SessionUser | null;
 };
 
 const PLAYBACK_SPEEDS = [1, 5, 10, 20, 50] as const;
@@ -36,10 +37,11 @@ const DEFAULT_STABILITY_CATEGORIES: StabilityCategory[] = ["0", "unregular", "go
 export function DashboardShell({ viewer }: DashboardShellProps) {
   const router = useRouter();
   const { t } = useTranslation();
-  const isAdmin = viewer.role === "admin";
+  const isGuest = viewer === null;
+  const isAdmin = viewer?.role === "admin";
   const [collection, setCollection] = useState<PingFeatureCollection>(EMPTY_COLLECTION);
   const [summary, setSummary] = useState<PingSummary>(summarizeCollection(EMPTY_COLLECTION));
-  const [mode, setMode] = useState<ViewMode>("markers");
+  const [mode, setMode] = useState<ViewMode>(isGuest ? "hexagon" : "markers");
   const [calculationMode, setCalculationMode] = useState<CalculationMode>("stabilized");
   const [selectedCategories, setSelectedCategories] = useState<SignalCategory[]>(DEFAULT_SIGNAL_CATEGORIES);
   const [selectedStability, setSelectedStability] = useState<StabilityCategory[]>(DEFAULT_STABILITY_CATEGORIES);
@@ -55,6 +57,7 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
   const [statusMessage, setStatusMessage] = useState(t("dashboard.status.ready"));
   const [followedBoardId, setFollowedBoardId] = useState<string | null>(null);
   const [newFeatureKeys, setNewFeatureKeys] = useState<string[]>([]);
+  const [restrictedHexagons, setRestrictedHexagons] = useState<RestrictedHexagon[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
   const [bonusInfoOpen, setBonusInfoOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
@@ -139,7 +142,14 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
   }, [router]);
 
   const fetchDataset = useCallback(async (checkForNew = false) => {
-    const response = await fetch("/api/pings", { cache: "no-store" });
+    const searchParams = new URLSearchParams();
+
+    if (isGuest) {
+      searchParams.set("hexSize", String(hexSize));
+      searchParams.set("minHexPoints", String(minHexPoints));
+    }
+
+    const response = await fetch(`/api/pings${searchParams.size > 0 ? `?${searchParams.toString()}` : ""}`, { cache: "no-store" });
 
     if (response.status === 401) {
       redirectToLogin();
@@ -147,6 +157,19 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
     }
 
     const data = (await response.json()) as DatasetResponse;
+
+    if (data.accessMode === "guest") {
+      setCollection(EMPTY_COLLECTION);
+      setSummary(data.summary);
+      setRestrictedHexagons(data.restrictedHexagons);
+      setCountdown(data.nextUpdateInSeconds || AUTO_REFRESH_SECONDS);
+      setNewFeatureKeys([]);
+      latestTimestampRef.current = null;
+      previousMaxIndexRef.current = 0;
+      setRange({ start: 0, end: 0 });
+      return;
+    }
+
     const nextSortedFeatures = sortFeatures(data.collection.features).filter((feature) =>
       isValidCoordinate(feature.geometry.coordinates),
     );
@@ -161,6 +184,7 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
 
     setCollection(data.collection);
     setSummary(data.summary);
+    // setRestrictedHexagons([]);
     setCountdown(data.nextUpdateInSeconds || AUTO_REFRESH_SECONDS);
     setNewFeatureKeys(nextNewFeatureKeys);
     latestTimestampRef.current = nextSortedFeatures.at(-1)?.properties.time ?? null;
@@ -176,7 +200,13 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
     });
     
     previousMaxIndexRef.current = newMaxIndex;
-  }, [redirectToLogin]);
+  }, [hexSize, isGuest, minHexPoints, redirectToLogin]);
+
+  useEffect(() => {
+    if (isGuest && mode !== "hexagon") {
+      setMode("hexagon");
+    }
+  }, [isGuest, mode]);
 
   useEffect(() => {
     void fetchDataset();
@@ -283,6 +313,10 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
   };
 
   const toggleFollowBoard = (boardId: string) => {
+    if (isGuest) {
+      return;
+    }
+
     setFollowedBoardId((previous) => (previous === boardId ? null : boardId));
     if (selectedBoards === null || !selectedBoards.includes(boardId)) {
       setSelectedBoards((previous) => {
@@ -477,12 +511,13 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
       <ControlPanel
         boardCounts={boardCounts}
         // canImport={isAdmin}
-        canImport={true}
+        canImport={!isGuest && true}
         calculationMode={calculationMode}
         countdown={countdown}
         followedBoardId={followedBoardId}
         gatewayCounts={gatewayCounts}
         hexSize={hexSize}
+        isGuest={isGuest}
         isUpdating={isUpdating}
         menuOpen={menuOpen}
         minHexPoints={minHexPoints}
@@ -505,7 +540,7 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
         selectedStability={selectedStability}
         statusMessage={statusMessage}
         handleLogout={handleLogout}
-        isAdmin={isAdmin}
+        isAdmin={Boolean(isAdmin)}
       />
 
       <section className="map-stage">
@@ -517,21 +552,24 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
           minHexPoints={minHexPoints}
           mode={mode}
           newFeatureKeys={newFeatureKeys}
+          restrictedHexagons={restrictedHexagons}
         />
 
-        <TimelineControls
-          currentRangeLabel={rangeLabel}
-          end={range.end}
-          isPlaying={isPlaying}
-          max={maxRangeIndex}
-          onCycleSpeed={cyclePlaybackSpeed}
-          onEndChange={(value) => setRange((currentRange) => ({ ...currentRange, end: Math.max(value, currentRange.start) }))}
-          onPlayPause={togglePlayback}
-          onStartChange={(value) => setRange((currentRange) => ({ ...currentRange, start: Math.min(value, currentRange.end) }))}
-          playbackSpeed={playbackSpeed}
-          pointCountLabel={t("dashboard.timeline.pointsInRange", { count: filteredFeatures.length })}
-          start={range.start}
-        />
+        {!isGuest ? (
+          <TimelineControls
+            currentRangeLabel={rangeLabel}
+            end={range.end}
+            isPlaying={isPlaying}
+            max={maxRangeIndex}
+            onCycleSpeed={cyclePlaybackSpeed}
+            onEndChange={(value) => setRange((currentRange) => ({ ...currentRange, end: Math.max(value, currentRange.start) }))}
+            onPlayPause={togglePlayback}
+            onStartChange={(value) => setRange((currentRange) => ({ ...currentRange, start: Math.min(value, currentRange.end) }))}
+            playbackSpeed={playbackSpeed}
+            pointCountLabel={t("dashboard.timeline.pointsInRange", { count: filteredFeatures.length })}
+            start={range.start}
+          />
+        ) : null}
       </section>
 
       {bonusInfoOpen ? (

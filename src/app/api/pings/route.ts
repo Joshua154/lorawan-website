@@ -1,23 +1,48 @@
 import { NextResponse } from "next/server";
 
-import { filterCollectionByBoards, summarizeCollection } from "@/lib/pings";
+import { buildRestrictedHexagons, DEFAULT_HEX_MIN_POINTS, DEFAULT_HEX_SIZE, EMPTY_COLLECTION, filterCollectionByBoards, summarizeCollection } from "@/lib/pings";
 import { getCurrentUser } from "@/server/auth";
 import { getPings, getNextUpdateInSeconds } from "@/server/ping-service";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
-  const user = await getCurrentUser();
+// const ALLOWED_HEX_SIZES = new Set([0.0008, 0.0015, 0.0035, 0.007]);
+const ALLOWED_HEX_SIZES = new Set([DEFAULT_HEX_SIZE]);
+// const ALLOWED_MIN_HEX_POINTS = new Set([1, 5, 10, 25]);
+const ALLOWED_MIN_HEX_POINTS = new Set([DEFAULT_HEX_MIN_POINTS]);
 
-  if (!user) {
-    return NextResponse.json({ message: "Unauthorized." }, { status: 401 });
-  }
+function parseHexSize(value: string | null): number {
+  const numericValue = Number(value);
+  return ALLOWED_HEX_SIZES.has(numericValue) ? numericValue : DEFAULT_HEX_SIZE;
+}
+
+function parseMinHexPoints(value: string | null): number {
+  const numericValue = Number(value);
+  return ALLOWED_MIN_HEX_POINTS.has(numericValue) ? numericValue : DEFAULT_HEX_MIN_POINTS;
+}
+
+export async function GET(request: Request) {
+  const user = await getCurrentUser();
+  const { searchParams } = new URL(request.url);
+  const hexSize = parseHexSize(searchParams.get("hexSize"));
+  const minHexPoints = parseMinHexPoints(searchParams.get("minHexPoints"));
 
   const { collection } = await getPings();
+
+  if (!user) {
+    return NextResponse.json({
+      accessMode: "guest",
+      restrictedHexagons: buildRestrictedHexagons(collection.features, { hexSize, minHexPoints }),
+      summary: summarizeCollection(EMPTY_COLLECTION),
+      nextUpdateInSeconds: getNextUpdateInSeconds(),
+    });
+  }
+
   const visibleCollection =
     user.role === "admin" ? collection : filterCollectionByBoards(collection, user.assignedBoardIds);
 
   return NextResponse.json({ 
+    accessMode: "authenticated",
     collection: visibleCollection, 
     summary: summarizeCollection(visibleCollection),
     nextUpdateInSeconds: getNextUpdateInSeconds(),
