@@ -7,6 +7,7 @@ import { BoardSelector } from "@/components/admin/board-selector";
 import { FormMessage } from "@/components/ui/form-message";
 import { RoleBadge } from "@/components/ui/role-badge";
 import {
+  UserRole,
   type CreateUserPayload,
   type ManagedUser,
   type PingSummary,

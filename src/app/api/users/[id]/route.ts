@@ -27,7 +27,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   }
 
   const params = await context.params;
-  const userId = parsePositiveIntegerParam(params.id, "user id");
+  const userId = parsePositiveIntegerParam(params.id);
 
   if (userId == null) {
     return badRequestResponse("Invalid user id.");
@@ -58,7 +58,7 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
   }
 
   const params = await context.params;
-  const userId = parsePositiveIntegerParam(params.id, "user id");
+  const userId = parsePositiveIntegerParam(params.id);
 
   if (userId == null) {
     return badRequestResponse("Invalid user id.");
