@@ -140,7 +140,7 @@
     "dashboard.help.driver.description": "Falls das Board unter Windows nicht erkannt wird, installiere den CP210x VCP Treiber von Silicon Labs und starte den Browser neu.",
     "dashboard.help.driver.linkText": "Treiber herunterladen",
 
-    "map.sources.offlineImport": "Offline-Import (Flash)",
+    "map.sources.offlineImport": "Offline-Import",
     "map.popup.point": "Messpunkt #",
     "map.popup.boardId": "Board ID:",
     "map.popup.signalReal": "Signal (Real):",
