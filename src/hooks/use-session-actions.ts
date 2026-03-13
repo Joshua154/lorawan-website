@@ -18,8 +18,8 @@ export function useSessionActions() {
 
   const logout = useCallback(async () => {
     await fetch("/api/auth/logout", { method: "POST" });
-    redirectToLogin();
-  }, [redirectToLogin]);
+    redirectHome();
+  }, [redirectHome]);
 
   return {
     logout,
