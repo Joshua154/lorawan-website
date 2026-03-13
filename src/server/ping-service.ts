@@ -257,7 +257,152 @@ function updateMasterWithIncrementalBonus(
   return { added: actuallyNew.length, updated };
 }
 
-function parseLogToFeatures(logText: string, limitTimestamp?: number): PingFeature[] {
+/**
+ * Checks whether a ping (identified by boardID + counter + exact GPS) already
+ * exists in the master collection. Used for deduplication of historical pings
+ * from the new multi-ping payload format.
+ */
+function pingExistsInMaster(
+  masterFeatures: PingFeature[],
+  boardID: number | string,
+  counter: number,
+  longitude: number,
+  latitude: number,
+): boolean {
+  for (let index = masterFeatures.length - 1; index >= 0; index -= 1) {
+    const existing = masterFeatures[index];
+    const ep = existing.properties;
+    const [eLon, eLat] = existing.geometry.coordinates;
+
+    if (
+      String(ep.boardID) === String(boardID) &&
+      Number(ep.counter) === Number(counter) &&
+      eLon.toFixed(6) === longitude.toFixed(6) &&
+      eLat.toFixed(6) === latitude.toFixed(6)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+type ParsedLogEntry = {
+  /** The current ping at index 0 – always has real RSSI / gateway data */
+  currentPing: PingFeature;
+  /**
+   * Historical pings from indices 1-N of the new payload format.
+   * Empty array for old-format payloads.
+   * These are Funkloch candidates (rssi=-1, no gateway).
+   */
+  historicalPings: PingFeature[];
+};
+
+/**
+ * Parses a single assembled log entry (payload + gateway + gatewayname) into a
+ * ParsedLogEntry, handling both the legacy single-ping format and the new
+ * multi-ping array format.
+ *
+ * Legacy format:
+ *   payload:{"boardID":0,"breit":52.41,"counter":44,"lang":13.03}
+ *
+ * New format:
+ *   payload:{"boardID":3,"pings":[{"counter":4,"latitude":52.39,"longitude":13.13}, ...]}
+ *   Index 0 in the array = current ping (real RSSI), index 1-N = historical Funkloch candidates.
+ */
+function parseLogEntry(
+  payload: Record<string, unknown>,
+  gateway: Record<string, unknown>,
+  gatewayName: string,
+  timestamp: string,
+): ParsedLogEntry | null {
+  const rssi = Number(gateway.rssi ?? -1);
+  const snr = Number(gateway.snr ?? 0);
+  const boardID = Number(payload.boardID);
+
+  // ── New multi-ping format ────────────────────────────────────────────────
+  if (Array.isArray(payload.pings)) {
+    const pings = payload.pings as Array<{
+      counter: number;
+      latitude: number;
+      longitude: number;
+    }>;
+
+    if (pings.length === 0) {
+      return null;
+    }
+
+    const current = pings[0];
+    if (!current) return null;
+
+    const currentPing: PingFeature = {
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [Number(current.longitude), Number(current.latitude)] },
+      properties: {
+        boardID,
+        counter: Number(current.counter),
+        gateway: gatewayName,
+        rssi,
+        snr,
+        // Time will be adjusted in parseLogToFeatures if Funklöcher are inserted
+        time: timestamp,
+      },
+    };
+
+    const historicalPings: PingFeature[] = pings.slice(1).map((ping) => ({
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [Number(ping.longitude), Number(ping.latitude)] },
+      properties: {
+        boardID,
+        counter: Number(ping.counter),
+        gateway: "Funkloch-Upload (LoRaWAN)",
+        rssi: -1,
+        snr: undefined,
+        // Placeholder – real time assigned in parseLogToFeatures
+        time: timestamp,
+      },
+    }));
+
+    return { currentPing, historicalPings };
+  }
+
+  // ── Legacy single-ping format ────────────────────────────────────────────
+  const currentPing: PingFeature = {
+    type: "Feature",
+    geometry: {
+      type: "Point",
+      coordinates: [Number(payload.lang), Number(payload.breit)],
+    },
+    properties: {
+      boardID,
+      counter: Number(payload.counter),
+      gateway: gatewayName,
+      rssi,
+      snr,
+      time: timestamp,
+    },
+  };
+
+  return { currentPing, historicalPings: [] };
+}
+
+/**
+ * Parses the raw log text into PingFeatures, supporting both payload formats.
+ *
+ * For the new multi-ping format:
+ * - Historical pings (index 1-N) are inserted as Funklöcher (rssi=-1) only if
+ *   they do not already exist in masterFeatures (exact match on boardID +
+ *   counter + lon + lat).
+ * - If at least one new Funkloch is inserted, the current ping (index 0) gets a
+ *   timestamp of (latestFunklochTime + 1s) so it always sorts after them.
+ * - If no new Funklöcher are inserted, the current ping keeps its original timestamp.
+ *
+ * masterFeatures is passed in so we can check the DB without an async call here.
+ */
+function parseLogToFeatures(
+  logText: string,
+  limitTimestamp: number | undefined,
+  masterFeatures: PingFeature[],
+): PingFeature[] {
   const features: PingFeature[] = [];
   const payloadPattern = /^payload:(\{.*\})$/;
   const gatewayPattern = /^gateway:(\{.*\})$/;
@@ -301,21 +446,68 @@ function parseLogToFeatures(logText: string, limitTimestamp?: number): PingFeatu
         break;
       }
 
-      features.push({
-        type: "Feature",
-        geometry: {
-          type: "Point",
-          coordinates: [Number(tempPayload.lang), Number(tempPayload.breit)],
-        },
-        properties: {
-          boardID: Number(tempPayload.boardID),
-          counter: Number(tempPayload.counter),
-          gateway: tempGatewayName,
-          rssi: Number(tempGateway.rssi ?? -1),
-          snr: Number(tempGateway.snr ?? 0),
-          time: timestamp,
-        },
-      });
+      const entry = parseLogEntry(tempPayload, tempGateway, tempGatewayName, timestamp);
+
+      if (entry) {
+        // ── Process historical pings (index 1-N) as Funkloch candidates ──
+        // Each new Funkloch gets a unique timestamp 1s after the previous one,
+        // starting from the current ping's timestamp. This keeps them ordered
+        // and ensures the current ping can be placed strictly after all of them.
+        let latestFunklochTime: number | null = null;
+        let funklochOffset = 0;
+
+        for (const hist of entry.historicalPings) {
+          const { boardID, counter } = hist.properties;
+          const [lon, lat] = hist.geometry.coordinates;
+
+          // Skip invalid coordinates
+          if (lon === 0 && lat === 0) {
+            continue;
+          }
+
+          // Exact-match dedup: skip if already in DB or already queued in this batch
+          const alreadyInMaster = pingExistsInMaster(masterFeatures, boardID, counter, lon, lat);
+          const alreadyInBatch = features.some((f) => {
+            const [fLon, fLat] = f.geometry.coordinates;
+            return (
+              String(f.properties.boardID) === String(boardID) &&
+              Number(f.properties.counter) === Number(counter) &&
+              fLon.toFixed(6) === lon.toFixed(6) &&
+              fLat.toFixed(6) === lat.toFixed(6)
+            );
+          });
+
+          if (!alreadyInMaster && !alreadyInBatch) {
+            funklochOffset += 1;
+            const funklochTime = currentTime + funklochOffset * 1000;
+            latestFunklochTime = funklochTime;
+
+            features.push({
+              ...hist,
+              properties: {
+                ...hist.properties,
+                time: new Date(funklochTime).toISOString(),
+              },
+            });
+          }
+        }
+
+        // ── Current ping (index 0) ──
+        // Placed 1s after the last inserted Funkloch so it always sorts newest.
+        // Falls back to the original gateway timestamp when no Funklöcher were added.
+        const currentPingTime =
+          latestFunklochTime !== null
+            ? new Date(latestFunklochTime + 1000).toISOString()
+            : timestamp;
+
+        features.push({
+          ...entry.currentPing,
+          properties: {
+            ...entry.currentPing.properties,
+            time: currentPingTime,
+          },
+        });
+      }
 
       tempPayload = null;
       tempGateway = null;
@@ -383,7 +575,9 @@ export async function runRemoteUpdate(): Promise<UpdateResult> {
   }
 
   const logText = await response.text();
-  const nextFeatures = parseLogToFeatures(logText, limitTimestamp);
+  // Pass the loaded master features so parseLogToFeatures can deduplicate
+  // historical pings without an additional async DB call.
+  const nextFeatures = parseLogToFeatures(logText, limitTimestamp, collection.features);
   const { added, updated } = updateMasterWithIncrementalBonus(nextFeatures, collection);
 
   if (added > 0 || updated > 0) {
