@@ -426,7 +426,7 @@ export function LoraWanMap({
       dynamicLayersRef.current.push(layerGroup);
     }
 
-    if (followedFeature) {
+    if (followedFeature && featureKeySet.has(buildFeatureKey(followedFeature))) {
       const [longitude, latitude] = followedFeature.geometry.coordinates;
       map.flyTo([latitude, longitude], 18, { duration: 1.5 });
     }
