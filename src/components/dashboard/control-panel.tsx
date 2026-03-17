@@ -12,6 +12,7 @@ import { sortNumericStrings } from "@/lib/users";
 type ControlPanelProps = {
   canImport: boolean;
   isGuest: boolean;
+  releaseMillisecondsRemaining: number | null;
   mode: ViewMode;
   calculationMode: CalculationMode;
   minHexPoints: number;
@@ -69,6 +70,7 @@ const HEX_MIN_POINTS = [1, 5, 10, 25];
 export function ControlPanel({
   canImport,
   isGuest,
+  releaseMillisecondsRemaining,
   mode,
   calculationMode,
   minHexPoints,
@@ -160,6 +162,28 @@ export function ControlPanel({
     }
   };
 
+  function formatReleaseCountdown(milliseconds: number) {
+    const totalSeconds = Math.floor(milliseconds / 1000);
+    const days = Math.floor(totalSeconds / (3600 * 24));
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    const timeString = 
+      `` + (days > 0 ? t("dashboard.guest.releaseInDays", { count: days }) + " " : "") +
+      (hours > 0 ? t("dashboard.guest.releaseInHours", { count: hours }) + " " : "") +
+      (minutes > 0 ? t("dashboard.guest.releaseInMinutes", { count: minutes }) + " " : "") +
+      (seconds > 0 ? t("dashboard.guest.releaseInSeconds", { count: seconds }) : "");
+        
+    return t("dashboard.guest.releaseIn", {
+      timeString,
+      days,
+      hours,
+      minutes,
+      seconds,
+    });
+  }
+
   return (
     <>
       <button className="menu-toggle" onClick={onToggleMenu} type="button">
@@ -174,6 +198,7 @@ export function ControlPanel({
             </p>
             <h1>{t("dashboard.panel.heading")}</h1>
             {isGuest ? <p className="helper-text">{t("dashboard.guest.notice")}</p> : null}
+            {isGuest && releaseMillisecondsRemaining ? <p className="helper-text">{formatReleaseCountdown(releaseMillisecondsRemaining)}</p> : null}
           </div>
           {canImport ? (
             <button className="primary-button" onClick={onImportClick} type="button">

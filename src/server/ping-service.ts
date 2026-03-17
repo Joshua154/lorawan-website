@@ -606,3 +606,18 @@ export async function uploadManualPings(features: PingFeature[]): Promise<{ adde
 
   return { added, updated };
 }
+
+export const releaseTimestamp = process.env.RELEASE_TIMESTAMP ? new Date(process.env.RELEASE_TIMESTAMP) : null;
+export function isReleased(): boolean {
+  if (!releaseTimestamp) {
+    return true;
+  }
+  return Date.now() >= releaseTimestamp.getTime();
+}
+export function getMillisecondsUntilRelease(): number | null {
+  if (!releaseTimestamp) {
+    return null;
+  }
+  const ms = releaseTimestamp.getTime() - Date.now();
+  return ms > 0 ? ms : 0;
+}
