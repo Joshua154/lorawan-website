@@ -16,6 +16,7 @@ type LegacyPingRecord = {
   latitude: number;
   rssi_stabilized: number | null;
   rssi_bonus: number | null;
+  network: string | null;
 };
 
 declare global {
@@ -82,7 +83,8 @@ async function createTables(client: Pool | PoolClient): Promise<void> {
       longitude DOUBLE PRECISION NOT NULL,
       latitude DOUBLE PRECISION NOT NULL,
       rssi_stabilized INTEGER,
-      rssi_bonus INTEGER
+      rssi_bonus INTEGER,
+      network TEXT
     );
 
     CREATE UNIQUE INDEX IF NOT EXISTS idx_users_local_username
@@ -121,7 +123,8 @@ async function insertPingRecords(client: Pool | PoolClient, records: LegacyPingR
           longitude,
           latitude,
           rssi_stabilized,
-          rssi_bonus
+          rssi_bonus,
+          network
         )
         SELECT
           entry.board_id,
@@ -133,7 +136,8 @@ async function insertPingRecords(client: Pool | PoolClient, records: LegacyPingR
           entry.longitude,
           entry.latitude,
           entry.rssi_stabilized,
-          entry.rssi_bonus
+          entry.rssi_bonus,
+          entry.network
         FROM jsonb_to_recordset($1::jsonb) AS entry(
           board_id text,
           counter integer,
@@ -144,7 +148,8 @@ async function insertPingRecords(client: Pool | PoolClient, records: LegacyPingR
           longitude double precision,
           latitude double precision,
           rssi_stabilized integer,
-          rssi_bonus integer
+          rssi_bonus integer,
+          network text
         )
       `,
       [JSON.stringify(chunk)],
@@ -164,6 +169,7 @@ function toLegacyPingRecord(feature: PingFeature): LegacyPingRecord {
     latitude: Number(feature.geometry.coordinates[1]),
     rssi_stabilized: feature.properties.rssi_stabilized == null ? null : Number(feature.properties.rssi_stabilized),
     rssi_bonus: feature.properties.rssi_bonus == null ? null : Number(feature.properties.rssi_bonus),
+    network: feature.properties.network === "chirpstack" ? "chirpstack" : null,
   };
 }
 

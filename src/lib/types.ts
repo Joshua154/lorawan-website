@@ -4,6 +4,7 @@ export type SignalCategory = "good" | "medium" | "bad" | "deadzone";
 export type StabilityCategory = "stable" | "good" | "unregular" | "0";
 export type ViewMode = "markers" | "heatmap" | "hexagon";
 export type CalculationMode = "stabilized" | "raw";
+export type PingNetwork = "ttn" | "chirpstack";
 
 export type PingProperties = {
   boardID: number | string;
@@ -14,6 +15,7 @@ export type PingProperties = {
   time: string;
   rssi_stabilized?: number;
   rssi_bonus?: number;
+  network?: PingNetwork;
 };
 
 export type PingFeature = {
@@ -98,4 +100,3 @@ export type GuestDatasetResponse = {
 };
 
 export type DatasetResponse = AuthenticatedDatasetResponse | GuestDatasetResponse;
-

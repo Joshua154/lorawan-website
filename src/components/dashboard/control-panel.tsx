@@ -1,6 +1,6 @@
 "use client";
 
-import type { CalculationMode, SignalCategory, StabilityCategory, ViewMode } from "@/lib/types";
+import type { CalculationMode, PingNetwork, SignalCategory, StabilityCategory, ViewMode } from "@/lib/types";
 import Link from "next/link";
 import { useState } from "react";
 import { CollapsibleSection } from "@/components/ui/collapsible-section";
@@ -17,6 +17,7 @@ type ControlPanelProps = {
   hexSize: number;
   selectedCategories: SignalCategory[];
   selectedStability: StabilityCategory[];
+  selectedNetwork: PingNetwork;
   selectedBoards: string[] | null;
   selectedGateways: string[] | null;
   boardCounts: Record<string, number>;
@@ -36,6 +37,7 @@ type ControlPanelProps = {
   onMinHexPointsChange: (value: number) => void;
   onToggleCategory: (value: SignalCategory) => void;
   onToggleStability: (value: StabilityCategory) => void;
+  onSelectNetwork: (value: PingNetwork) => void;
   onToggleBoard: (value: string) => void;
   onToggleGateway: (value: string) => void;
   onFollowBoard: (value: string) => void;
@@ -74,6 +76,7 @@ export function ControlPanel({
   hexSize,
   selectedCategories,
   selectedStability,
+  selectedNetwork,
   selectedBoards,
   selectedGateways,
   boardCounts,
@@ -92,6 +95,7 @@ export function ControlPanel({
   onMinHexPointsChange,
   onToggleCategory,
   onToggleStability,
+  onSelectNetwork,
   onToggleBoard,
   onToggleGateway,
   onFollowBoard,
@@ -213,6 +217,26 @@ export function ControlPanel({
             ) : null}
           </CollapsibleSection>
         ) : null}
+
+        <CollapsibleSection
+          collapsed={Boolean(collapsedSections["network"])}
+          onToggle={() => toggleSection("network")}
+          title={<h2 style={{ margin: 0 }}>{t("dashboard.filters.networkTitle")}</h2>}
+        >
+          <div className="stacked-options compact">
+            {(["ttn", "chirpstack"] as PingNetwork[]).map((network) => (
+              <label key={network}>
+                <input
+                  checked={selectedNetwork === network}
+                  name="network"
+                  onChange={() => onSelectNetwork(network)}
+                  type="radio"
+                />
+                <span>{t(`dashboard.filters.network.${network}`)}</span>
+              </label>
+            ))}
+          </div>
+        </CollapsibleSection>
 
         {!isGuest ? (
           <CollapsibleSection

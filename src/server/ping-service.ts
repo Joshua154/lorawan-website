@@ -17,6 +17,7 @@ type PingRow = {
   latitude: number;
   rssi_stabilized: number | null;
   rssi_bonus: number | null;
+  network: string | null;
 };
 
 type CacheState = {
@@ -72,6 +73,7 @@ function mapPingRow(row: PingRow): PingFeature {
       time: toIsoString(row.observed_at),
       rssi_stabilized: row.rssi_stabilized == null ? undefined : Number(row.rssi_stabilized),
       rssi_bonus: row.rssi_bonus == null ? undefined : Number(row.rssi_bonus),
+      network: (row.network === "chirpstack" ? "chirpstack" : "ttn"),
     },
   };
 }
@@ -79,7 +81,7 @@ function mapPingRow(row: PingRow): PingFeature {
 export async function loadFeatureCollection(): Promise<PingFeatureCollection> {
   const { rows } = await query<PingRow>(
     `
-      SELECT board_id, counter, gateway_name, rssi, snr, observed_at, longitude, latitude, rssi_stabilized, rssi_bonus
+      SELECT board_id, counter, gateway_name, rssi, snr, observed_at, longitude, latitude, rssi_stabilized, rssi_bonus, network
       FROM ping_features
       ORDER BY observed_at ASC, feature_id ASC
     `,
@@ -130,6 +132,7 @@ function applyStabilityBonus(features: PingFeature[]): void {
     const currentTime = parseTimestamp(properties.time);
     const boardId = String(properties.boardID);
     const currentCounter = Number(properties.counter);
+    const currentNetwork = properties.network === "chirpstack" ? "chirpstack" : "ttn";
     const lookbackLimit = currentTime - LOOKBACK_HOURS * 60 * 60 * 1000;
 
     let foundPrevious = 0;
@@ -145,6 +148,11 @@ function applyStabilityBonus(features: PingFeature[]): void {
       }
 
       if (String(previousProperties.boardID) !== boardId) {
+        continue;
+      }
+
+      const previousNetwork = previousProperties.network === "chirpstack" ? "chirpstack" : "ttn";
+      if (previousNetwork !== currentNetwork) {
         continue;
       }
 
@@ -343,6 +351,7 @@ function parseLogEntry(
         gateway: gatewayName,
         rssi,
         snr,
+        network: "ttn",
         // Time will be adjusted in parseLogToFeatures if Funklöcher are inserted
         time: timestamp,
       },
@@ -357,6 +366,7 @@ function parseLogEntry(
         gateway: "Funkloch-Upload (LoRaWAN)",
         rssi: -1,
         snr: undefined,
+        network: "ttn" as const,
         // Placeholder – real time assigned in parseLogToFeatures
         time: timestamp,
       },
@@ -378,6 +388,7 @@ function parseLogEntry(
       gateway: gatewayName,
       rssi,
       snr,
+      network: "ttn",
       time: timestamp,
     },
   };
