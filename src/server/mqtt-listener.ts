@@ -1,5 +1,6 @@
 import mqtt from "mqtt";
 import { uploadManualPings } from "@/server/ping-service";
+import { queryPingTimes } from "@/server/database";
 import type { PingFeature } from "@/lib/types";
 
 const MQTT_BROKER   = process.env.MQTT_BROKER;
@@ -36,24 +37,46 @@ client.on("message", async (topic, message) => {
     const baseTime  = Date.parse(payload.time ?? "") || Date.now();
     const boardID   = decoded.boardID;
 
-    const features: PingFeature[] = decoded.pings
-      .filter((p: any) => p.latitude !== 0 || p.longitude !== 0)
-      .map((p: any, i: number) => ({
+    const validPings: Array<{ p: any; i: number }> = decoded.pings
+      .map((p: any, i: number) => ({ p, i }))
+      .filter(({ p }: { p: any }) => p.latitude !== 0 || p.longitude !== 0);
+
+    const funklochCounters = validPings.filter(({ i }) => i > 0).map(({ p }) => Number(p.counter));
+    const existingTimes = await queryPingTimes(String(boardID), funklochCounters, "chirpstack");
+
+    let anchor = baseTime;
+    let funklochOffset = 0;
+
+    const features: PingFeature[] = validPings.map(({ p, i }) => {
+      let time: string;
+
+      if (i === 0) {
+        anchor = baseTime;
+        funklochOffset = 0;
+        time = new Date(baseTime).toISOString();
+      } else if (existingTimes.has(Number(p.counter))) {
+        anchor = existingTimes.get(Number(p.counter))!;
+        funklochOffset = 0;
+        time = new Date(anchor).toISOString();
+      } else {
+        funklochOffset += 1;
+        time = new Date(anchor - funklochOffset * 1000).toISOString();
+      }
+
+      return {
         type: "Feature",
-        geometry: {
-          type: "Point",
-          coordinates: [p.longitude, p.latitude],
-        },
+        geometry: { type: "Point", coordinates: [p.longitude, p.latitude] },
         properties: {
           boardID,
           counter: p.counter,
           gateway: i === 0 ? gatewayId : "Funkloch-Upload (LoRaWAN)",
           rssi:    i === 0 ? rssi : -1,
           snr:     i === 0 ? snr : undefined,
-          time:    new Date(baseTime - i * 1000).toISOString(),
+          time,
           network: "chirpstack" as const,
         },
-      }));
+      };
+    });
 
     const result = await uploadManualPings(features);
     console.log(`MQTT [${topic}]: +${result.added} neu, ${result.updated} aktualisiert`);

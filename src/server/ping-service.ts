@@ -266,17 +266,16 @@ function updateMasterWithIncrementalBonus(
 }
 
 /**
- * Checks whether a ping (identified by boardID + counter + exact GPS) already
- * exists in the master collection. Used for deduplication of historical pings
- * from the new multi-ping payload format.
+ * Returns the timestamp (ms) of a ping if it already exists in the master
+ * collection (matched by boardID + counter + exact GPS), or null otherwise.
  */
-function pingExistsInMaster(
+function getPingTimeFromMaster(
   masterFeatures: PingFeature[],
   boardID: number | string,
   counter: number,
   longitude: number,
   latitude: number,
-): boolean {
+): number | null {
   for (let index = masterFeatures.length - 1; index >= 0; index -= 1) {
     const existing = masterFeatures[index];
     const ep = existing.properties;
@@ -288,10 +287,10 @@ function pingExistsInMaster(
       eLon.toFixed(6) === longitude.toFixed(6) &&
       eLat.toFixed(6) === latitude.toFixed(6)
     ) {
-      return true;
+      return parseTimestamp(ep.time);
     }
   }
-  return false;
+  return null;
 }
 
 type ParsedLogEntry = {
@@ -461,10 +460,10 @@ function parseLogToFeatures(
 
       if (entry) {
         // ── Process historical pings (index 1-N) as Funkloch candidates ──
-        // Each new Funkloch gets a unique timestamp 1s after the previous one,
-        // starting from the current ping's timestamp. This keeps them ordered
-        // and ensures the current ping can be placed strictly after all of them.
-        let latestFunklochTime: number | null = null;
+        // Funklöcher are placed strictly BEFORE the current ping using a
+        // descending anchor: anchor starts at currentTime and resets to the
+        // existing DB timestamp whenever a ping is found in master.
+        let anchor = currentTime;
         let funklochOffset = 0;
 
         for (const hist of entry.historicalPings) {
@@ -476,8 +475,15 @@ function parseLogToFeatures(
             continue;
           }
 
-          // Exact-match dedup: skip if already in DB or already queued in this batch
-          const alreadyInMaster = pingExistsInMaster(masterFeatures, boardID, counter, lon, lat);
+          // If already in DB: use its timestamp as new anchor, do not add
+          const existingTime = getPingTimeFromMaster(masterFeatures, boardID, counter, lon, lat);
+          if (existingTime !== null) {
+            anchor = existingTime;
+            funklochOffset = 0;
+            continue;
+          }
+
+          // Skip if already queued in this batch
           const alreadyInBatch = features.some((f) => {
             const [fLon, fLat] = f.geometry.coordinates;
             return (
@@ -488,34 +494,25 @@ function parseLogToFeatures(
             );
           });
 
-          if (!alreadyInMaster && !alreadyInBatch) {
+          if (!alreadyInBatch) {
             funklochOffset += 1;
-            const funklochTime = currentTime + funklochOffset * 1000;
-            latestFunklochTime = funklochTime;
-
             features.push({
               ...hist,
               properties: {
                 ...hist.properties,
-                time: new Date(funklochTime).toISOString(),
+                time: new Date(anchor - funklochOffset * 1000).toISOString(),
               },
             });
           }
         }
 
         // ── Current ping (index 0) ──
-        // Placed 1s after the last inserted Funkloch so it always sorts newest.
-        // Falls back to the original gateway timestamp when no Funklöcher were added.
-        const currentPingTime =
-          latestFunklochTime !== null
-            ? new Date(latestFunklochTime + 1000).toISOString()
-            : timestamp;
-
+        // Always keeps its original gateway timestamp — the newest in the group.
         features.push({
           ...entry.currentPing,
           properties: {
             ...entry.currentPing.properties,
-            time: currentPingTime,
+            time: timestamp,
           },
         });
       }

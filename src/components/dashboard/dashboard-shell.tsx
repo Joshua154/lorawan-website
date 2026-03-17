@@ -76,6 +76,11 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
     [collection.features],
   );
 
+  const networkSortedFeatures = useMemo(
+    () => sortedFeatures.filter((feature) => (feature.properties.network === "chirpstack" ? "chirpstack" : "ttn") === selectedNetwork),
+    [sortedFeatures, selectedNetwork],
+  );
+
   const boardCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const feature of sortedFeatures) {
@@ -106,12 +111,12 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
   );
 
   const rangedFeatures = useMemo(() => {
-    if (sortedFeatures.length === 0) {
+    if (networkSortedFeatures.length === 0) {
       return [];
     }
 
-    return sortedFeatures.slice(range.start, range.end + 1);
-  }, [range.end, range.start, sortedFeatures]);
+    return networkSortedFeatures.slice(range.start, range.end + 1);
+  }, [range.end, range.start, networkSortedFeatures]);
 
   const filteredFeatures = useMemo(() => {
     return rangedFeatures.filter((feature) => {
@@ -138,17 +143,17 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
       return null;
     }
 
-    const boardFeatures = sortedFeatures.filter(
+    const boardFeatures = networkSortedFeatures.filter(
       (feature) => String(feature.properties.boardID) === followedBoardId,
     );
     return boardFeatures.at(-1) ?? null;
-  }, [followedBoardId, sortedFeatures]);
+  }, [followedBoardId, networkSortedFeatures]);
 
   const rangeLabel = useMemo(() => {
-    const startLabel = formatTimestamp(sortedFeatures[range.start]?.properties.time);
-    const endLabel = formatTimestamp(sortedFeatures[range.end]?.properties.time);
+    const startLabel = formatTimestamp(networkSortedFeatures[range.start]?.properties.time);
+    const endLabel = formatTimestamp(networkSortedFeatures[range.end]?.properties.time);
     return t("dashboard.range.fromTo", { start: startLabel, end: endLabel });
-  }, [range.end, range.start, sortedFeatures, t]);
+  }, [range.end, range.start, networkSortedFeatures, t]);
 
   const fetchDataset = useCallback(async (checkForNew = false) => {
     const searchParams = new URLSearchParams();
@@ -182,7 +187,10 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
     const nextSortedFeatures = sortFeatures(data.collection.features).filter((feature) =>
       isValidCoordinate(feature.geometry.coordinates),
     );
-    const newMaxIndex = Math.max(nextSortedFeatures.length - 1, 0);
+    const nextNetworkFeatures = nextSortedFeatures.filter(
+      (f) => (f.properties.network === "chirpstack" ? "chirpstack" : "ttn") === selectedNetwork,
+    );
+    const newMaxIndex = Math.max(nextNetworkFeatures.length - 1, 0);
 
     let nextNewFeatureKeys: string[] = [];
     if (checkForNew && latestTimestampRef.current) {
@@ -221,6 +229,14 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
   }, [fetchDataset]);
 
   useEffect(() => {
+    if (!isGuest) {
+      const newMaxIndex = Math.max(networkSortedFeatures.length - 1, 0);
+      previousMaxIndexRef.current = newMaxIndex;
+      setRange({ start: 0, end: newMaxIndex });
+    }
+  }, [selectedNetwork]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
     const knownBoards = knownBoardsRef.current;
     setSelectedBoards((previous) => mergeSelectableOptions(boardOptions, previous, knownBoards));
     knownBoardsRef.current = boardOptions;
@@ -239,7 +255,7 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
 
     const interval = window.setInterval(() => {
       setRange((currentRange) => {
-        if (currentRange.end >= sortedFeatures.length - 1) {
+        if (currentRange.end >= networkSortedFeatures.length - 1) {
           window.clearInterval(interval);
           setIsPlaying(false);
           return currentRange;
@@ -457,7 +473,7 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
     window.setTimeout(() => setStatusMessage(t("dashboard.status.ready")), 5_000);
   };
 
-  const maxRangeIndex = Math.max(sortedFeatures.length - 1, 0);
+  const maxRangeIndex = Math.max(networkSortedFeatures.length - 1, 0);
 
   return (
     <main className="dashboard-shell">

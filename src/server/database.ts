@@ -236,6 +236,23 @@ export async function withTransaction<T>(callback: (client: PoolClient) => Promi
   }
 }
 
+export async function queryPingTimes(
+  boardID: string,
+  counters: number[],
+  network: "ttn" | "chirpstack",
+): Promise<Map<number, number>> {
+  if (counters.length === 0) return new Map();
+  const { rows } = await query<{ counter: string; observed_at: Date }>(
+    `SELECT counter, observed_at FROM ping_features WHERE board_id = $1 AND counter = ANY($2) AND network = $3`,
+    [boardID, counters, network],
+  );
+  const map = new Map<number, number>();
+  for (const row of rows) {
+    map.set(Number(row.counter), row.observed_at instanceof Date ? row.observed_at.getTime() : Date.parse(String(row.observed_at)));
+  }
+  return map;
+}
+
 export async function replacePingFeatures(features: PingFeature[]): Promise<void> {
   await withTransaction(async (client) => {
     await client.query("TRUNCATE TABLE ping_features RESTART IDENTITY");
