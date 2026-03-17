@@ -5,9 +5,17 @@ import Link from "next/link";
 import { useState } from "react";
 import { CollapsibleSection } from "@/components/ui/collapsible-section";
 import { FormMessage } from "@/components/ui/form-message";
+import { Modal } from "@/components/ui/modal";
 import { RoleBadge } from "@/components/ui/role-badge";
 import { useTranslation } from "@/i18n/useTranslation";
+import { AUTO_REFRESH_SECONDS } from "@/lib/pings";
 import { sortNumericStrings } from "@/lib/users";
+
+// Rounded-rect path for the countdown ring, starting at top-center going clockwise.
+// viewBox="0 0 60 60", SVG inset=-6px → button (48px) occupies (6,6)→(54,54).
+// Path sits exactly on the button edge so the stroke (w=3) is half inside, half outside → flush.
+const RING_PATH =
+  "M 30 6 L 39.6 6 A 14.4 14.4 0 0 1 54 20.4 V 39.6 A 14.4 14.4 0 0 1 39.6 54 H 20.4 A 14.4 14.4 0 0 1 6 39.6 V 20.4 A 14.4 14.4 0 0 1 20.4 6 H 30";
 
 type ControlPanelProps = {
   canImport: boolean;
@@ -112,6 +120,7 @@ export function ControlPanel({
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   const [passwordFeedback, setPasswordFeedback] = useState<{ kind: "success" | "error"; message: string } | null>(null);
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
   const roleLabel = isGuest
     ? t("common.roles.guest")
     : isAdmin
@@ -159,6 +168,7 @@ export function ControlPanel({
       setNewPassword("");
       setConfirmPassword("");
       setPasswordFeedback({ kind: "success", message: t("dashboard.account.password.feedback.updated") });
+      window.setTimeout(() => setPasswordModalOpen(false), 1_200);
     } catch {
       setPasswordFeedback({ kind: "error", message: t("dashboard.account.password.errors.generic") });
     } finally {
@@ -190,9 +200,25 @@ export function ControlPanel({
 
   return (
     <>
-      <button className="menu-toggle" onClick={onToggleMenu} type="button">
-        {menuOpen ? "✕" : "☰"}
-      </button>
+      <div className="menu-toggle-wrapper">
+        <button className="menu-toggle" onClick={onToggleMenu} type="button">
+          {menuOpen ? "✕" : "☰"}
+        </button>
+        {!menuOpen && (
+          <svg aria-hidden="true" className="countdown-ring" viewBox="0 0 60 60">
+            <path
+              d={RING_PATH}
+              fill="none"
+              pathLength={1}
+              stroke="white"
+              strokeDasharray={1}
+              strokeDashoffset={1 - countdown / AUTO_REFRESH_SECONDS}
+              strokeLinecap="round"
+              strokeWidth="3"
+            />
+          </svg>
+        )}
+      </div>
       <aside className={`control-panel ${menuOpen ? "is-open" : ""}`}>
         <div className="panel-header">
           <div>
@@ -222,6 +248,11 @@ export function ControlPanel({
               <Link className="secondary-button nav-link-button" href="/admin">
                 {t("dashboard.panel.adminArea")}
               </Link>
+            ) : null}
+            {!isGuest ? (
+              <button className="secondary-button" onClick={() => setPasswordModalOpen(true)} type="button">
+                {t("dashboard.account.password.submit")}
+              </button>
             ) : null}
             {!isGuest ? (
               <button className="secondary-button" onClick={() => void handleLogout()} type="button">
@@ -452,53 +483,58 @@ export function ControlPanel({
           </CollapsibleSection>
         ) : null}
 
-        {!isGuest ? (
-          <CollapsibleSection
-            collapsed={Boolean(collapsedSections["account"])}
-            onToggle={() => toggleSection("account")}
-            title={<h2 style={{ margin: 0 }}>{t("dashboard.account.title")}</h2>}
-          >
-            <form className="stacked-options compact" onSubmit={handlePasswordChange}>
-              <label>
-                <span>{t("dashboard.account.password.current")}</span>
-                <input
-                  autoComplete="current-password"
-                  onChange={(event) => setCurrentPassword(event.target.value)}
-                  required
-                  type="password"
-                  value={currentPassword}
-                />
-              </label>
-              <label>
-                <span>{t("dashboard.account.password.new")}</span>
-                <input
-                  autoComplete="new-password"
-                  minLength={6}
-                  onChange={(event) => setNewPassword(event.target.value)}
-                  required
-                  type="password"
-                  value={newPassword}
-                />
-              </label>
-              <label>
-                <span>{t("dashboard.account.password.confirm")}</span>
-                <input
-                  autoComplete="new-password"
-                  minLength={6}
-                  onChange={(event) => setConfirmPassword(event.target.value)}
-                  required
-                  type="password"
-                  value={confirmPassword}
-                />
-              </label>
-              <FormMessage feedback={passwordFeedback} />
-              <button className="primary-button" disabled={isUpdatingPassword} type="submit">
-                {isUpdatingPassword ? t("dashboard.account.password.submitting") : t("dashboard.account.password.submit")}
-              </button>
-            </form>
-          </CollapsibleSection>
-        ) : null}
       </aside>
+
+      <Modal
+        onClose={() => {
+          setPasswordModalOpen(false);
+          setPasswordFeedback(null);
+          setCurrentPassword("");
+          setNewPassword("");
+          setConfirmPassword("");
+        }}
+        open={passwordModalOpen}
+        title={t("dashboard.account.title")}
+      >
+        <form className="stacked-options compact" onSubmit={handlePasswordChange} style={{ marginTop: "0.5rem" }}>
+          <label>
+            <span>{t("dashboard.account.password.current")}</span>
+            <input
+              autoComplete="current-password"
+              onChange={(event) => setCurrentPassword(event.target.value)}
+              required
+              type="password"
+              value={currentPassword}
+            />
+          </label>
+          <label>
+            <span>{t("dashboard.account.password.new")}</span>
+            <input
+              autoComplete="new-password"
+              minLength={6}
+              onChange={(event) => setNewPassword(event.target.value)}
+              required
+              type="password"
+              value={newPassword}
+            />
+          </label>
+          <label>
+            <span>{t("dashboard.account.password.confirm")}</span>
+            <input
+              autoComplete="new-password"
+              minLength={6}
+              onChange={(event) => setConfirmPassword(event.target.value)}
+              required
+              type="password"
+              value={confirmPassword}
+            />
+          </label>
+          <FormMessage feedback={passwordFeedback} />
+          <button className="primary-button" disabled={isUpdatingPassword} type="submit">
+            {isUpdatingPassword ? t("dashboard.account.password.submitting") : t("dashboard.account.password.submit")}
+          </button>
+        </form>
+      </Modal>
     </>
   );
 }
