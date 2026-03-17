@@ -26,6 +26,8 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const hexSize = parseHexSize(searchParams.get("hexSize"));
   const minHexPoints = parseMinHexPoints(searchParams.get("minHexPoints"));
+  const networkParam = searchParams.get("network");
+  const guestNetwork = networkParam === "ttn" || networkParam === "chirpstack" ? networkParam : "chirpstack";
 
   const { collection } = await getPings();
 
@@ -38,10 +40,14 @@ export async function GET(request: Request) {
         nextUpdateInSeconds: getNextUpdateInSeconds(),
       });
     }
+    
+    const guestFeatures = collection.features.filter(
+      (f) => (f.properties.network === "chirpstack" ? "chirpstack" : "ttn") === guestNetwork,
+    );
 
     return NextResponse.json({
       accessMode: "guest",
-      restrictedHexagons: buildRestrictedHexagons(collection.features, { hexSize, minHexPoints }),
+      restrictedHexagons: buildRestrictedHexagons(guestFeatures, { hexSize, minHexPoints }),
       summary: summarizeCollection(EMPTY_COLLECTION),
       nextUpdateInSeconds: getNextUpdateInSeconds(),
     });

@@ -2,13 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { AUTO_REFRESH_SECONDS, DEFAULT_HEX_MIN_POINTS, DEFAULT_HEX_SIZE, EMPTY_COLLECTION, buildFeatureKey, formatTimestamp, getSignalCategory, getStabilityCategory, isValidCoordinate, summarizeCollection, sortFeatures } from "@/lib/pings";
+import { AUTO_REFRESH_SECONDS, DEFAULT_HEX_MIN_POINTS, DEFAULT_HEX_SIZE, EMPTY_COLLECTION, buildFeatureKey, formatTimestamp, getSignalCategory, getStabilityCategory, isValidCoordinate, sortFeatures } from "@/lib/pings";
 import { extractManualPings } from "@/lib/ping-import";
 import type {
   CalculationMode,
   DatasetResponse,
   PingFeatureCollection,
-  PingSummary,
+  PingNetwork,
   RestrictedHexagon,
   SessionUser,
   SignalCategory,
@@ -17,7 +17,7 @@ import type {
 } from "@/lib/types";
 import { mergeSelectableOptions, sortNumericStrings, toggleStringSelection } from "@/lib/users";
 import { ControlPanel } from "@/components/dashboard/control-panel";
-import { TimelineControls } from "@/components/dashboard/timeline-controls";
+import { TimelineControls, type TimeFilter } from "@/components/dashboard/timeline-controls";
 import { LoraWanMap } from "@/components/map/lorawan-map";
 import { Modal } from "@/components/ui/modal";
 import { useTranslation } from "@/i18n/useTranslation";
@@ -36,6 +36,7 @@ type DashboardShellProps = {
 const PLAYBACK_SPEEDS = [1, 5, 10, 20, 50] as const;
 const DEFAULT_SIGNAL_CATEGORIES: SignalCategory[] = ["good", "medium", "bad", "deadzone"];
 const DEFAULT_STABILITY_CATEGORIES: StabilityCategory[] = ["0", "unregular", "good", "stable"];
+const DEFAULT_NETWORK: PingNetwork = "ttn";
 
 export function DashboardShell({ viewer, releaseMillisecondsRemaining }: DashboardShellProps) {
   const { t } = useTranslation();
@@ -43,11 +44,11 @@ export function DashboardShell({ viewer, releaseMillisecondsRemaining }: Dashboa
   const isGuest = viewer === null;
   const isAdmin = viewer?.role === "admin";
   const [collection, setCollection] = useState<PingFeatureCollection>(EMPTY_COLLECTION);
-  const [summary, setSummary] = useState<PingSummary>(summarizeCollection(EMPTY_COLLECTION));
   const [mode, setMode] = useState<ViewMode>(isGuest ? "hexagon" : "markers");
   const [calculationMode, setCalculationMode] = useState<CalculationMode>("stabilized");
   const [selectedCategories, setSelectedCategories] = useState<SignalCategory[]>(DEFAULT_SIGNAL_CATEGORIES);
   const [selectedStability, setSelectedStability] = useState<StabilityCategory[]>(DEFAULT_STABILITY_CATEGORIES);
+  const [selectedNetwork, setSelectedNetwork] = useState<PingNetwork>(isGuest ? "chirpstack" : DEFAULT_NETWORK);
   const [selectedBoards, setSelectedBoards] = useState<string[] | null>(null);
   const [selectedGateways, setSelectedGateways] = useState<string[] | null>(null);
   const [hexSize, setHexSize] = useState(DEFAULT_HEX_SIZE);
@@ -59,6 +60,7 @@ export function DashboardShell({ viewer, releaseMillisecondsRemaining }: Dashboa
   const [isUpdating, setIsUpdating] = useState(false);
   const [statusMessage, setStatusMessage] = useState(t("dashboard.status.ready"));
   const [followedBoardId, setFollowedBoardId] = useState<string | null>(null);
+  const [activeTimeFilter, setActiveTimeFilter] = useState<TimeFilter | null>(null);
   const [newFeatureKeys, setNewFeatureKeys] = useState<string[]>([]);
   const [restrictedHexagons, setRestrictedHexagons] = useState<RestrictedHexagon[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -76,8 +78,31 @@ export function DashboardShell({ viewer, releaseMillisecondsRemaining }: Dashboa
     [collection.features],
   );
 
-  const boardCounts = useMemo(() => summary.boardCounts, [summary.boardCounts]);
-  const gatewayCounts = useMemo(() => summary.gatewayCounts, [summary.gatewayCounts]);
+  const networkSortedFeatures = useMemo(
+    () => sortedFeatures.filter((feature) => (feature.properties.network === "chirpstack" ? "chirpstack" : "ttn") === selectedNetwork),
+    [sortedFeatures, selectedNetwork],
+  );
+
+  const boardCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const feature of sortedFeatures) {
+      const network: PingNetwork = feature.properties.network === "chirpstack" ? "chirpstack" : "ttn";
+      if (network !== selectedNetwork) continue;
+      const boardId = String(feature.properties.boardID);
+      counts[boardId] = (counts[boardId] ?? 0) + 1;
+    }
+    return counts;
+  }, [sortedFeatures, selectedNetwork]);
+  const gatewayCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const feature of sortedFeatures) {
+      const network: PingNetwork = feature.properties.network === "chirpstack" ? "chirpstack" : "ttn";
+      if (network !== selectedNetwork) continue;
+      const gateway = feature.properties.gateway ?? t("map.sources.offlineImport");
+      counts[gateway] = (counts[gateway] ?? 0) + 1;
+    }
+    return counts;
+  }, [sortedFeatures, selectedNetwork, t]);
   const boardOptions = useMemo(
     () => sortNumericStrings(Object.keys(boardCounts)),
     [boardCounts],
@@ -88,12 +113,12 @@ export function DashboardShell({ viewer, releaseMillisecondsRemaining }: Dashboa
   );
 
   const rangedFeatures = useMemo(() => {
-    if (sortedFeatures.length === 0) {
+    if (networkSortedFeatures.length === 0) {
       return [];
     }
 
-    return sortedFeatures.slice(range.start, range.end + 1);
-  }, [range.end, range.start, sortedFeatures]);
+    return networkSortedFeatures.slice(range.start, range.end + 1);
+  }, [range.end, range.start, networkSortedFeatures]);
 
   const filteredFeatures = useMemo(() => {
     return rangedFeatures.filter((feature) => {
@@ -103,32 +128,34 @@ export function DashboardShell({ viewer, releaseMillisecondsRemaining }: Dashboa
         calculationMode === "stabilized" ? feature.properties.rssi_stabilized : undefined,
       );
       const stabilityCategory = getStabilityCategory(feature.properties.rssi_bonus);
+      const network: PingNetwork = feature.properties.network === "chirpstack" ? "chirpstack" : "ttn";
 
       return (
+        network === selectedNetwork &&
         (selectedBoards === null || selectedBoards.includes(String(feature.properties.boardID))) &&
         (selectedGateways === null || selectedGateways.includes(gateway)) &&
         selectedCategories.includes(category) &&
         selectedStability.includes(stabilityCategory)
       );
     });
-  }, [calculationMode, rangedFeatures, selectedBoards, selectedCategories, selectedGateways, selectedStability, t]);
+  }, [calculationMode, rangedFeatures, selectedBoards, selectedCategories, selectedGateways, selectedNetwork, selectedStability, t]);
 
   const followedFeature = useMemo(() => {
     if (!followedBoardId) {
       return null;
     }
 
-    const boardFeatures = sortedFeatures.filter(
+    const boardFeatures = networkSortedFeatures.filter(
       (feature) => String(feature.properties.boardID) === followedBoardId,
     );
     return boardFeatures.at(-1) ?? null;
-  }, [followedBoardId, sortedFeatures]);
+  }, [followedBoardId, networkSortedFeatures]);
 
   const rangeLabel = useMemo(() => {
-    const startLabel = formatTimestamp(sortedFeatures[range.start]?.properties.time);
-    const endLabel = formatTimestamp(sortedFeatures[range.end]?.properties.time);
+    const startLabel = formatTimestamp(networkSortedFeatures[range.start]?.properties.time);
+    const endLabel = formatTimestamp(networkSortedFeatures[range.end]?.properties.time);
     return t("dashboard.range.fromTo", { start: startLabel, end: endLabel });
-  }, [range.end, range.start, sortedFeatures, t]);
+  }, [range.end, range.start, networkSortedFeatures, t]);
 
   const fetchDataset = useCallback(async (checkForNew = false) => {
     const searchParams = new URLSearchParams();
@@ -136,6 +163,7 @@ export function DashboardShell({ viewer, releaseMillisecondsRemaining }: Dashboa
     if (isGuest) {
       searchParams.set("hexSize", String(hexSize));
       searchParams.set("minHexPoints", String(minHexPoints));
+      searchParams.set("network", selectedNetwork);
     }
 
     const response = await fetch(`/api/pings${searchParams.size > 0 ? `?${searchParams.toString()}` : ""}`, { cache: "no-store" });
@@ -149,7 +177,6 @@ export function DashboardShell({ viewer, releaseMillisecondsRemaining }: Dashboa
 
     if (data.accessMode === "guest") {
       setCollection(EMPTY_COLLECTION);
-      setSummary(data.summary);
       setRestrictedHexagons(data.restrictedHexagons);
       setCountdown(data.nextUpdateInSeconds || AUTO_REFRESH_SECONDS);
       setNewFeatureKeys([]);
@@ -162,21 +189,23 @@ export function DashboardShell({ viewer, releaseMillisecondsRemaining }: Dashboa
     const nextSortedFeatures = sortFeatures(data.collection.features).filter((feature) =>
       isValidCoordinate(feature.geometry.coordinates),
     );
-    const newMaxIndex = Math.max(nextSortedFeatures.length - 1, 0);
+    const nextNetworkFeatures = nextSortedFeatures.filter(
+      (f) => (f.properties.network === "chirpstack" ? "chirpstack" : "ttn") === selectedNetwork,
+    );
+    const newMaxIndex = Math.max(nextNetworkFeatures.length - 1, 0);
 
     let nextNewFeatureKeys: string[] = [];
     if (checkForNew && latestTimestampRef.current) {
-      nextNewFeatureKeys = nextSortedFeatures
+      nextNewFeatureKeys = nextNetworkFeatures
         .filter((feature) => Date.parse(feature.properties.time) > Date.parse(latestTimestampRef.current ?? ""))
         .map(buildFeatureKey);
     }
 
     setCollection(data.collection);
-    setSummary(data.summary);
     // setRestrictedHexagons([]);
     setCountdown(data.nextUpdateInSeconds || AUTO_REFRESH_SECONDS);
     setNewFeatureKeys(nextNewFeatureKeys);
-    latestTimestampRef.current = nextSortedFeatures.at(-1)?.properties.time ?? null;
+    latestTimestampRef.current = nextNetworkFeatures.at(-1)?.properties.time ?? null;
 
     const previousMaxIndex = previousMaxIndexRef.current;
     
@@ -189,7 +218,7 @@ export function DashboardShell({ viewer, releaseMillisecondsRemaining }: Dashboa
     });
     
     previousMaxIndexRef.current = newMaxIndex;
-  }, [hexSize, isGuest, minHexPoints, redirectToLogin]);
+  }, [hexSize, isGuest, minHexPoints, redirectToLogin, selectedNetwork]);
 
   useEffect(() => {
     if (isGuest && mode !== "hexagon") {
@@ -200,6 +229,14 @@ export function DashboardShell({ viewer, releaseMillisecondsRemaining }: Dashboa
   useEffect(() => {
     void fetchDataset();
   }, [fetchDataset]);
+
+  useEffect(() => {
+    if (!isGuest) {
+      const newMaxIndex = Math.max(networkSortedFeatures.length - 1, 0);
+      previousMaxIndexRef.current = newMaxIndex;
+      setRange({ start: 0, end: newMaxIndex });
+    }
+  }, [selectedNetwork]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const knownBoards = knownBoardsRef.current;
@@ -220,7 +257,7 @@ export function DashboardShell({ viewer, releaseMillisecondsRemaining }: Dashboa
 
     const interval = window.setInterval(() => {
       setRange((currentRange) => {
-        if (currentRange.end >= sortedFeatures.length - 1) {
+        if (currentRange.end >= networkSortedFeatures.length - 1) {
           window.clearInterval(interval);
           setIsPlaying(false);
           return currentRange;
@@ -283,6 +320,10 @@ export function DashboardShell({ viewer, releaseMillisecondsRemaining }: Dashboa
     );
   };
 
+  const selectNetwork = (network: PingNetwork) => {
+    setSelectedNetwork(network);
+  };
+
   const toggleBoard = (boardId: string) => {
     setSelectedBoards((previous) => {
       const currentSelection = previous ?? boardOptions;
@@ -311,6 +352,19 @@ export function DashboardShell({ viewer, releaseMillisecondsRemaining }: Dashboa
     }
   };
 
+  const applyTimeFilter = (filter: TimeFilter | null) => {
+    setActiveTimeFilter(filter);
+    setIsPlaying(false);
+    if (!filter) return;
+    const windowMs = filter === "1h" ? 3_600_000 : filter === "24h" ? 86_400_000 : 604_800_000;
+    const cutoff = Date.now() - windowMs;
+    const firstIndex = networkSortedFeatures.findIndex((f) => Date.parse(f.properties.time) >= cutoff);
+    const startIndex = firstIndex === -1 ? networkSortedFeatures.length - 1 : firstIndex;
+    window.setTimeout(() => {
+      setRange((current) => ({ start: startIndex, end: current.end }));
+    }, 50);
+  };
+
   const cyclePlaybackSpeed = () => {
     const currentIndex = PLAYBACK_SPEEDS.indexOf(playbackSpeed as (typeof PLAYBACK_SPEEDS)[number]);
     const nextIndex = (currentIndex + 1) % PLAYBACK_SPEEDS.length;
@@ -318,7 +372,7 @@ export function DashboardShell({ viewer, releaseMillisecondsRemaining }: Dashboa
   };
 
   const togglePlayback = () => {
-    if (!isPlaying && range.end >= sortedFeatures.length - 1) {
+    if (!isPlaying) {
       setRange((currentRange) => ({ ...currentRange, end: currentRange.start }));
     }
     setIsPlaying((currentValue) => !currentValue);
@@ -434,7 +488,8 @@ export function DashboardShell({ viewer, releaseMillisecondsRemaining }: Dashboa
     window.setTimeout(() => setStatusMessage(t("dashboard.status.ready")), 5_000);
   };
 
-  const maxRangeIndex = Math.max(sortedFeatures.length - 1, 0);
+  const maxRangeIndex = Math.max(networkSortedFeatures.length - 1, 0);
+  const isAtLiveEdge = range.end >= maxRangeIndex;
 
   return (
     <main className="dashboard-shell">
@@ -463,6 +518,8 @@ export function DashboardShell({ viewer, releaseMillisecondsRemaining }: Dashboa
         onToggleBoard={toggleBoard}
         onToggleCategory={toggleSignalCategory}
         onToggleGateway={toggleGateway}
+        selectedNetwork={selectedNetwork}
+        onSelectNetwork={selectNetwork}
         onToggleMenu={() => setMenuOpen((currentValue) => !currentValue)}
         onToggleStability={toggleStabilityCategory}
         selectedBoards={selectedBoards}
@@ -479,6 +536,7 @@ export function DashboardShell({ viewer, releaseMillisecondsRemaining }: Dashboa
           calculationMode={calculationMode}
           features={filteredFeatures}
           followedFeature={followedFeature}
+          isAtLiveEdge={isAtLiveEdge}
           hexSize={hexSize}
           minHexPoints={minHexPoints}
           mode={mode}
@@ -493,9 +551,11 @@ export function DashboardShell({ viewer, releaseMillisecondsRemaining }: Dashboa
             isPlaying={isPlaying}
             max={maxRangeIndex}
             onCycleSpeed={cyclePlaybackSpeed}
+            activeTimeFilter={activeTimeFilter}
             onEndChange={(value) => setRange((currentRange) => ({ ...currentRange, end: Math.max(value, currentRange.start) }))}
             onPlayPause={togglePlayback}
-            onStartChange={(value) => setRange((currentRange) => ({ ...currentRange, start: Math.min(value, currentRange.end) }))}
+            onStartChange={(value) => { setActiveTimeFilter(null); setRange((currentRange) => ({ ...currentRange, start: Math.min(value, currentRange.end) })); }}
+            onTimeFilter={applyTimeFilter}
             playbackSpeed={playbackSpeed}
             pointCountLabel={t("dashboard.timeline.pointsInRange", { count: filteredFeatures.length })}
             start={range.start}

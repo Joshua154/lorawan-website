@@ -13,6 +13,22 @@
   font-family: Inter, system-ui, sans-serif;
 }
 
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --bg: #0d1a0f;
+    --surface: rgba(18, 32, 20, 0.96);
+    --surface-strong: #1a2e1c;
+    --border: rgba(255, 255, 255, 0.1);
+    --text: #e2ede3;
+    --muted: #8fa893;
+    --accent: #4caf50;
+    --accent-soft: #1b3a1d;
+    --danger: #f87171;
+    --shadow: 0 18px 40px rgba(0, 0, 0, 0.5);
+  }
+}
+
 * {
   box-sizing: border-box;
 }
@@ -160,7 +176,7 @@ label {
 
 .secondary-button {
   background: #eef2f7;
-  color: var(--text);
+  color: #1a2e1c;
   padding: 0.8rem 1rem;
   min-height: 2.75rem;
 }
@@ -170,10 +186,29 @@ label {
   width: 2.5rem;
   height: 2.5rem;
   background: #e2e8f0;
+  color: #1a2e1c;
 }
 
 .follow-button.active {
   background: var(--accent-soft);
+}
+
+@media (prefers-color-scheme: dark) {
+  .secondary-button {
+    background: #2a3d2c;
+    color: var(--text);
+  }
+
+  .help-button,
+  .follow-button {
+    background: #2a3d2c;
+    color: var(--text);
+  }
+
+  .follow-button.active {
+    background: #3a6b3e;
+    color: #d4f5d8;
+  }
 }
 
 .status-card,
@@ -279,7 +314,8 @@ label {
   border: 1px solid var(--border);
   border-radius: 0.7rem;
   padding: 0.65rem 0.8rem;
-  background: white;
+  background: var(--surface-strong);
+  color: var(--text);
 }
 
 .gateways label {
@@ -304,7 +340,7 @@ label {
   gap: 1rem;
   width: min(52rem, calc(100vw - 28rem));
   padding: 1rem 1.1rem;
-  background: rgba(255, 255, 255, 0.92);
+  background: var(--surface);
   backdrop-filter: blur(12px);
 }
 
@@ -362,6 +398,18 @@ label {
   color: #075985;
 }
 
+@media (prefers-color-scheme: dark) {
+  .role-badge.admin {
+    background: #14532d;
+    color: #86efac;
+  }
+
+  .role-badge.user {
+    background: #0c4a6e;
+    color: #7dd3fc;
+  }
+}
+
 .admin-card {
   padding: 1rem;
   border: 1px solid var(--border);
@@ -397,6 +445,13 @@ label {
   font-weight: 700;
 }
 
+@media (prefers-color-scheme: dark) {
+  .admin-count {
+    background: #1e1b4b;
+    color: #a5b4fc;
+  }
+}
+
 .admin-form {
   margin-top: 1rem;
 }
@@ -413,7 +468,8 @@ label {
   border: 1px solid var(--border);
   border-radius: 0.8rem;
   padding: 0.75rem 0.85rem;
-  background: white;
+  background: var(--surface-strong);
+  color: var(--text);
 }
 
 .admin-board-grid {
@@ -428,7 +484,7 @@ label {
   gap: 0.5rem;
   padding: 0.55rem 0.65rem;
   border-radius: 0.8rem;
-  background: #f8fafc;
+  background: var(--surface-strong);
 }
 
 .admin-user-list {
@@ -447,7 +503,7 @@ label {
 .admin-user-stats article {
   padding: 0.85rem;
   border-radius: 0.95rem;
-  background: #f8fafc;
+  background: var(--surface-strong);
   border: 1px solid rgba(148, 163, 184, 0.2);
 }
 
@@ -475,7 +531,8 @@ label {
   border: 1px solid var(--border);
   border-radius: 0.8rem;
   padding: 0.75rem 0.85rem;
-  background: white;
+  background: var(--surface-strong);
+  color: var(--text);
 }
 
 .admin-user-results-bar {
@@ -493,7 +550,7 @@ label {
   padding: 0.85rem;
   border: 1px solid var(--border);
   border-radius: 0.9rem;
-  background: white;
+  background: var(--surface-strong);
 }
 
 .admin-user-row.editing {
@@ -528,8 +585,8 @@ label {
   align-items: center;
   padding: 0.35rem 0.65rem;
   border-radius: 999px;
-  background: #f8fafc;
-  color: #475569;
+  background: var(--surface-strong);
+  color: var(--muted);
   font-size: 0.8rem;
   font-weight: 600;
   border: 1px solid rgba(148, 163, 184, 0.2);
@@ -542,7 +599,7 @@ label {
 }
 
 .admin-board-chip.subtle {
-  background: #f8fafc;
+  background: var(--surface-strong);
   color: #334155;
 }
 
@@ -574,7 +631,7 @@ label {
   padding: 1rem;
   border: 1px dashed rgba(148, 163, 184, 0.5);
   border-radius: 1rem;
-  background: #f8fafc;
+  background: var(--surface-strong);
 }
 
 .admin-empty-state p {
@@ -651,7 +708,7 @@ label {
   padding: 1.25rem;
   border: 1px solid var(--border);
   border-radius: 1.25rem;
-  background: rgba(255, 255, 255, 0.94);
+  background: var(--surface);
   backdrop-filter: blur(12px);
   box-shadow: var(--shadow);
 }
@@ -694,12 +751,24 @@ label {
   font-weight: 600;
 }
 
+@media (prefers-color-scheme: dark) {
+  .admin-board-chip {
+    background: #1e1b4b;
+    color: #a5b4fc;
+  }
+
+  .admin-board-chip.subtle {
+    background: var(--surface-strong);
+    color: var(--muted);
+  }
+}
+
 .login-card {
   width: min(28rem, 100%);
   padding: 1.5rem;
   border: 1px solid var(--border);
   border-radius: 1.25rem;
-  background: rgba(255, 255, 255, 0.96);
+  background: var(--surface);
   box-shadow: var(--shadow);
 }
 
@@ -711,7 +780,7 @@ label {
   min-width: 7rem;
   padding: 0.75rem;
   border-radius: 0.9rem;
-  background: #f8fafc;
+  background: var(--surface-strong);
 }
 
 .summary-grid span {
@@ -738,7 +807,7 @@ label {
   z-index: 15;
   width: min(54rem, calc(100vw - 2rem));
   padding: 1rem;
-  background: rgba(255, 255, 255, 0.94);
+  background: var(--surface);
   backdrop-filter: blur(12px);
 }
 
@@ -756,7 +825,24 @@ label {
 
 .timeline-actions {
   display: flex;
+  align-items: center;
   gap: 0.6rem;
+}
+
+.timeline-time-filters {
+  display: none;
+  gap: 0.4rem;
+}
+
+.timeline-filter-btn.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+@media (min-width: 768px) {
+  .timeline-time-filters {
+    display: flex;
+  }
 }
 
 .range-shell {
@@ -776,11 +862,12 @@ label {
 
 .range-track {
   width: 100%;
-  background: #dbe2ea;
+  background: var(--border);
 }
 
 .range-fill {
-  background: #86efac;
+  background: var(--accent);
+  opacity: 0.55;
 }
 
 .range-shell input[type="range"] {
@@ -807,8 +894,8 @@ label {
   height: 1.5rem;
   border-radius: 999px;
   background: var(--accent);
-  border: 2px solid white;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.2);
+  border: 2px solid var(--surface-strong);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
   pointer-events: auto;
 }
 
@@ -829,8 +916,8 @@ label {
   height: 1.5rem;
   border-radius: 999px;
   background: var(--accent);
-  border: 2px solid white;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.2);
+  border: 2px solid var(--surface-strong);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
   pointer-events: auto;
 }
 
@@ -854,7 +941,7 @@ label {
 .modal-card ol,
 .modal-card ul {
   padding-left: 1.25rem;
-  color: #334155;
+  color: var(--text);
 }
 
 .modal-actions {
@@ -872,7 +959,8 @@ label {
   height: 2rem;
   border: 0;
   border-radius: 999px;
-  background: #e2e8f0;
+  background: var(--border);
+  color: var(--text);
 }
 
 .text-link {
