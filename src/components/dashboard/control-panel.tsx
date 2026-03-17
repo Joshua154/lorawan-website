@@ -4,6 +4,7 @@ import type { CalculationMode, SignalCategory, StabilityCategory, ViewMode } fro
 import Link from "next/link";
 import { useState } from "react";
 import { CollapsibleSection } from "@/components/ui/collapsible-section";
+import { FormMessage } from "@/components/ui/form-message";
 import { RoleBadge } from "@/components/ui/role-badge";
 import { useTranslation } from "@/i18n/useTranslation";
 import { sortNumericStrings } from "@/lib/users";
@@ -100,6 +101,11 @@ export function ControlPanel({
 }: ControlPanelProps) {
   const { t } = useTranslation();
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+  const [passwordFeedback, setPasswordFeedback] = useState<{ kind: "success" | "error"; message: string } | null>(null);
   const roleLabel = isGuest
     ? t("common.roles.guest")
     : isAdmin
@@ -108,6 +114,50 @@ export function ControlPanel({
 
   const toggleSection = (section: string) => {
     setCollapsedSections((prev) => ({ ...prev, [section]: !prev[section] }));
+  };
+
+  const handlePasswordChange = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setPasswordFeedback(null);
+
+    if (newPassword.trim().length < 6) {
+      setPasswordFeedback({ kind: "error", message: t("dashboard.account.password.errors.minLength") });
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordFeedback({ kind: "error", message: t("dashboard.account.password.errors.mismatch") });
+      return;
+    }
+
+    setIsUpdatingPassword(true);
+
+    try {
+      const response = await fetch("/api/auth/password", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+
+      const payload = (await response.json()) as { message?: string };
+
+      if (!response.ok) {
+        setPasswordFeedback({
+          kind: "error",
+          message: payload.message ?? t("dashboard.account.password.errors.generic"),
+        });
+        return;
+      }
+
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setPasswordFeedback({ kind: "success", message: t("dashboard.account.password.feedback.updated") });
+    } catch {
+      setPasswordFeedback({ kind: "error", message: t("dashboard.account.password.errors.generic") });
+    } finally {
+      setIsUpdatingPassword(false);
+    }
   };
 
   return (
@@ -350,6 +400,53 @@ export function ControlPanel({
                   </label>
                 ))}
             </div>
+          </CollapsibleSection>
+        ) : null}
+
+        {!isGuest ? (
+          <CollapsibleSection
+            collapsed={Boolean(collapsedSections["account"])}
+            onToggle={() => toggleSection("account")}
+            title={<h2 style={{ margin: 0 }}>{t("dashboard.account.title")}</h2>}
+          >
+            <form className="stacked-options compact" onSubmit={handlePasswordChange}>
+              <label>
+                <span>{t("dashboard.account.password.current")}</span>
+                <input
+                  autoComplete="current-password"
+                  onChange={(event) => setCurrentPassword(event.target.value)}
+                  required
+                  type="password"
+                  value={currentPassword}
+                />
+              </label>
+              <label>
+                <span>{t("dashboard.account.password.new")}</span>
+                <input
+                  autoComplete="new-password"
+                  minLength={6}
+                  onChange={(event) => setNewPassword(event.target.value)}
+                  required
+                  type="password"
+                  value={newPassword}
+                />
+              </label>
+              <label>
+                <span>{t("dashboard.account.password.confirm")}</span>
+                <input
+                  autoComplete="new-password"
+                  minLength={6}
+                  onChange={(event) => setConfirmPassword(event.target.value)}
+                  required
+                  type="password"
+                  value={confirmPassword}
+                />
+              </label>
+              <FormMessage feedback={passwordFeedback} />
+              <button className="primary-button" disabled={isUpdatingPassword} type="submit">
+                {isUpdatingPassword ? t("dashboard.account.password.submitting") : t("dashboard.account.password.submit")}
+              </button>
+            </form>
           </CollapsibleSection>
         ) : null}
       </aside>
