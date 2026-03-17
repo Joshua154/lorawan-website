@@ -38,9 +38,9 @@ function Divider({ children }: { children: ReactNode }) {
     <div className="login-divider" style={{ margin: "2rem 0", textAlign: "center", position: "relative" }}>
       <span
         style={{
-          backgroundColor: "var(--background, #fff)",
+          backgroundColor: "var(--surface-strong)",
           padding: "0 10px",
-          color: "var(--text-muted, #666)",
+          color: "var(--muted)",
           position: "relative",
           zIndex: 1,
         }}

@@ -426,11 +426,14 @@ export function LoraWanMap({
       dynamicLayersRef.current.push(layerGroup);
     }
 
-    if (followedFeature && featureKeySet.has(buildFeatureKey(followedFeature))) {
-      const [longitude, latitude] = followedFeature.geometry.coordinates;
-      map.flyTo([latitude, longitude], 18, { duration: 1.5 });
-    }
-  }, [calculationMode, featureKeySet, features, followedFeature, hexSize, isMapReady, minHexPoints, mode, restrictedHexagons, t]);
+  }, [calculationMode, featureKeySet, features, hexSize, isMapReady, minHexPoints, mode, restrictedHexagons, t]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!followedFeature || !map) return;
+    const [longitude, latitude] = followedFeature.geometry.coordinates;
+    map.flyTo([latitude, longitude], 18, { duration: 1.5 });
+  }, [followedFeature]);
 
   return <div className="map-canvas" ref={containerRef} />;
 }

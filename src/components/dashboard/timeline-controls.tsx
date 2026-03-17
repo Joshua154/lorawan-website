@@ -1,5 +1,13 @@
 "use client";
 
+export type TimeFilter = "1h" | "24h" | "7d";
+
+const TIME_FILTERS: { label: string; value: TimeFilter }[] = [
+  { label: "1h", value: "1h" },
+  { label: "24h", value: "24h" },
+  { label: "7d", value: "7d" },
+];
+
 type TimelineControlsProps = {
   start: number;
   end: number;
@@ -8,10 +16,12 @@ type TimelineControlsProps = {
   playbackSpeed: number;
   currentRangeLabel: string;
   pointCountLabel: string;
+  activeTimeFilter: TimeFilter | null;
   onPlayPause: () => void;
   onCycleSpeed: () => void;
   onStartChange: (value: number) => void;
   onEndChange: (value: number) => void;
+  onTimeFilter: (value: TimeFilter | null) => void;
 };
 
 export function TimelineControls({
@@ -22,10 +32,12 @@ export function TimelineControls({
   playbackSpeed,
   currentRangeLabel,
   pointCountLabel,
+  activeTimeFilter,
   onPlayPause,
   onCycleSpeed,
   onStartChange,
   onEndChange,
+  onTimeFilter,
 }: TimelineControlsProps) {
   const safeMax = Math.max(max, 1);
   const left = (start / safeMax) * 100;
@@ -40,6 +52,18 @@ export function TimelineControls({
           <p>{pointCountLabel}</p>
         </div>
         <div className="timeline-actions">
+          <div className="timeline-time-filters">
+            {TIME_FILTERS.map((f) => (
+              <button
+                className={`timeline-button timeline-filter-btn${activeTimeFilter === f.value ? " active" : ""}`}
+                key={f.value}
+                onClick={() => onTimeFilter(activeTimeFilter === f.value ? null : f.value)}
+                type="button"
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
           <button className="timeline-button" onClick={onPlayPause} type="button">
             {isPlaying ? "⏸" : "▶"}
           </button>

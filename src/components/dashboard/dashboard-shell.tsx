@@ -17,7 +17,7 @@ import type {
 } from "@/lib/types";
 import { mergeSelectableOptions, sortNumericStrings, toggleStringSelection } from "@/lib/users";
 import { ControlPanel } from "@/components/dashboard/control-panel";
-import { TimelineControls } from "@/components/dashboard/timeline-controls";
+import { TimelineControls, type TimeFilter } from "@/components/dashboard/timeline-controls";
 import { LoraWanMap } from "@/components/map/lorawan-map";
 import { Modal } from "@/components/ui/modal";
 import { useTranslation } from "@/i18n/useTranslation";
@@ -59,6 +59,7 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
   const [isUpdating, setIsUpdating] = useState(false);
   const [statusMessage, setStatusMessage] = useState(t("dashboard.status.ready"));
   const [followedBoardId, setFollowedBoardId] = useState<string | null>(null);
+  const [activeTimeFilter, setActiveTimeFilter] = useState<TimeFilter | null>(null);
   const [newFeatureKeys, setNewFeatureKeys] = useState<string[]>([]);
   const [restrictedHexagons, setRestrictedHexagons] = useState<RestrictedHexagon[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -350,6 +351,17 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
     }
   };
 
+  const applyTimeFilter = (filter: TimeFilter | null) => {
+    setActiveTimeFilter(filter);
+    setIsPlaying(false);
+    if (!filter) return;
+    const windowMs = filter === "1h" ? 3_600_000 : filter === "24h" ? 86_400_000 : 604_800_000;
+    const cutoff = Date.now() - windowMs;
+    const firstIndex = networkSortedFeatures.findIndex((f) => Date.parse(f.properties.time) >= cutoff);
+    const startIndex = firstIndex === -1 ? networkSortedFeatures.length - 1 : firstIndex;
+    setRange((current) => ({ start: startIndex, end: current.end }));
+  };
+
   const cyclePlaybackSpeed = () => {
     const currentIndex = PLAYBACK_SPEEDS.indexOf(playbackSpeed as (typeof PLAYBACK_SPEEDS)[number]);
     const nextIndex = (currentIndex + 1) % PLAYBACK_SPEEDS.length;
@@ -357,7 +369,7 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
   };
 
   const togglePlayback = () => {
-    if (!isPlaying && range.end >= sortedFeatures.length - 1) {
+    if (!isPlaying) {
       setRange((currentRange) => ({ ...currentRange, end: currentRange.start }));
     }
     setIsPlaying((currentValue) => !currentValue);
@@ -533,9 +545,11 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
             isPlaying={isPlaying}
             max={maxRangeIndex}
             onCycleSpeed={cyclePlaybackSpeed}
+            activeTimeFilter={activeTimeFilter}
             onEndChange={(value) => setRange((currentRange) => ({ ...currentRange, end: Math.max(value, currentRange.start) }))}
             onPlayPause={togglePlayback}
-            onStartChange={(value) => setRange((currentRange) => ({ ...currentRange, start: Math.min(value, currentRange.end) }))}
+            onStartChange={(value) => { setActiveTimeFilter(null); setRange((currentRange) => ({ ...currentRange, start: Math.min(value, currentRange.end) })); }}
+            onTimeFilter={applyTimeFilter}
             playbackSpeed={playbackSpeed}
             pointCountLabel={t("dashboard.timeline.pointsInRange", { count: filteredFeatures.length })}
             start={range.start}
