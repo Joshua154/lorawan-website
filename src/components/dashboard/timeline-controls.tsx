@@ -42,7 +42,7 @@ export function TimelineControls({
   const safeMax = Math.max(max, 1);
   const left = (start / safeMax) * 100;
   const right = (end / safeMax) * 100;
-  const areThumbsOverlapping = start === end;
+  const startOnTop = start > max / 2;
 
   return (
     <div className="timeline-shell">
@@ -79,7 +79,7 @@ export function TimelineControls({
           max={max}
           min={0}
           onChange={(event) => onStartChange(Number(event.target.value))}
-          style={{ zIndex: areThumbsOverlapping ? 2 : 1 }}
+          style={{ zIndex: startOnTop ? 2 : 1 }}
           type="range"
           className="start"
           value={start}
@@ -88,7 +88,7 @@ export function TimelineControls({
           max={max}
           min={0}
           onChange={(event) => onEndChange(Number(event.target.value))}
-          style={{ zIndex: areThumbsOverlapping ? 1 : 2 }}
+          style={{ zIndex: startOnTop ? 1 : 2 }}
           type="range"
           className="end"
           value={end}

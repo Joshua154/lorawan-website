@@ -85,6 +85,15 @@ export type UpdateUserPayload = {
   assignedBoardIds: string[];
 };
 
+export type AdminPasswordUpdatePayload = {
+  password: string;
+};
+
+export type ChangeOwnPasswordPayload = {
+  currentPassword: string;
+  newPassword: string;
+};
+
 export type AuthenticatedDatasetResponse = {
   accessMode: "authenticated";
   collection: PingFeatureCollection;

@@ -30,6 +30,7 @@ type RangeState = {
 
 type DashboardShellProps = {
   viewer: SessionUser | null;
+  releaseMillisecondsRemaining: number | null;
 };
 
 const PLAYBACK_SPEEDS = [1, 5, 10, 20, 50] as const;
@@ -37,7 +38,7 @@ const DEFAULT_SIGNAL_CATEGORIES: SignalCategory[] = ["good", "medium", "bad", "d
 const DEFAULT_STABILITY_CATEGORIES: StabilityCategory[] = ["0", "unregular", "good", "stable"];
 const DEFAULT_NETWORK: PingNetwork = "ttn";
 
-export function DashboardShell({ viewer }: DashboardShellProps) {
+export function DashboardShell({ viewer, releaseMillisecondsRemaining }: DashboardShellProps) {
   const { t } = useTranslation();
   const { logout, redirectToLogin } = useSessionActions();
   const isGuest = viewer === null;
@@ -502,6 +503,7 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
         gatewayCounts={gatewayCounts}
         hexSize={hexSize}
         isGuest={isGuest}
+        releaseMillisecondsRemaining={releaseMillisecondsRemaining}
         isUpdating={isUpdating}
         menuOpen={menuOpen}
         minHexPoints={minHexPoints}

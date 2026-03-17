@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { buildRestrictedHexagons, DEFAULT_HEX_MIN_POINTS, DEFAULT_HEX_SIZE, EMPTY_COLLECTION, filterCollectionByBoards, summarizeCollection } from "@/lib/pings";
 import { getCurrentUser } from "@/server/auth";
-import { getPings, getNextUpdateInSeconds } from "@/server/ping-service";
+import { getPings, getNextUpdateInSeconds, isReleased } from "@/server/ping-service";
 
 export const dynamic = "force-dynamic";
 
@@ -32,9 +32,19 @@ export async function GET(request: Request) {
   const { collection } = await getPings();
 
   if (!user) {
+    if (!isReleased()) {
+      return NextResponse.json({
+        accessMode: "guest",
+        restrictedHexagons: [],
+        summary: summarizeCollection(EMPTY_COLLECTION),
+        nextUpdateInSeconds: getNextUpdateInSeconds(),
+      });
+    }
+    
     const guestFeatures = collection.features.filter(
       (f) => (f.properties.network === "chirpstack" ? "chirpstack" : "ttn") === guestNetwork,
     );
+
     return NextResponse.json({
       accessMode: "guest",
       restrictedHexagons: buildRestrictedHexagons(guestFeatures, { hexSize, minHexPoints }),
