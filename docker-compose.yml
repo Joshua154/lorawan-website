@@ -43,5 +43,12 @@ services:
       # Optional: Provide a custom log pull URL
       # - LORAWAN_LOG_URL=http://stadtrandelfen.dsmynas.org:8008/test/2026_gps.log
 
+      # Optional: MQTT integration (ChirpStack)
+      # - MQTT_BROKER=your-broker-host
+      # - MQTT_PORT=8883
+      # - MQTT_USERNAME=your-username
+      # - MQTT_PASSWORD=your-password
+      # - MQTT_TOPIC=application/+/device/+/event/up
+
 volumes:
   postgres_data:

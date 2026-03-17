@@ -47,6 +47,13 @@ It combines a live map UI, role-based access control, PostgreSQL-backed storage,
 - Normalizes pings into PostgreSQL tables
 - Recomputes signal stability bonus values
 - Exposes filtered datasets through API routes
+- Optionally subscribes to a ChirpStack MQTT broker for live ping ingestion
+
+### ChirpStack MQTT Integration
+
+- Optional live data ingestion via MQTT from a ChirpStack instance
+- Automatically processes incoming uplinks and inserts new pings
+- Configured entirely through environment variables in `.env.local`
 
 ## Project Structure
 
@@ -117,6 +124,11 @@ Open `http://localhost:3000`.
 | `APP_URL` | Recommended in deployed setups | Trusted origin used for request-origin validation |
 | `NEXT_PUBLIC_APP_URL` | Optional | Fallback trusted origin if `APP_URL` is not set |
 | `LORAWAN_LOG_URL` | No | Overrides the default remote log source |
+| `MQTT_BROKER` | No | ChirpStack MQTT broker hostname |
+| `MQTT_PORT` | No | MQTT broker port (default: 1883) |
+| `MQTT_USERNAME` | No | MQTT username |
+| `MQTT_PASSWORD` | No | MQTT password |
+| `MQTT_TOPIC` | No | MQTT topic to subscribe to (default: `application/+/device/+/event/up`) |
 
 ## Default Admin Bootstrap
 
