@@ -52,6 +52,7 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
   const [managedUsers, setManagedUsers] = useState<ManagedUser[]>([]);
   const [userForm, setUserForm] = useState<CreateUserPayload>(DEFAULT_CREATE_USER_FORM);
   const [editForm, setEditForm] = useState<UpdateUserPayload | null>(null);
+  const [editPassword, setEditPassword] = useState("");
   const [editingUserId, setEditingUserId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<UserRoleFilter>("all");
@@ -165,11 +166,13 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
       assignedBoardIds: user.assignedBoardIds,
     });
     setManagementFeedback(null);
+    setEditPassword("");
   };
 
   const cancelEditingUser = () => {
     setEditingUserId(null);
     setEditForm(null);
+    setEditPassword("");
   };
 
   const handleCreateUser = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -246,7 +249,42 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
         return;
       }
 
-      setManagementFeedback({ kind: "success", message: t("admin.users.feedback.updated") });
+      const trimmedEditPassword = editPassword.trim();
+
+      if (trimmedEditPassword.length > 0) {
+        const passwordResponse = await fetch(`/api/users/${userId}/password`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ password: trimmedEditPassword }),
+        });
+
+        if (passwordResponse.status === 401) {
+          redirectToLogin();
+          return;
+        }
+
+        if (passwordResponse.status === 403) {
+          redirectHome();
+          return;
+        }
+
+        if (!passwordResponse.ok) {
+          const passwordResult = (await passwordResponse.json()) as UserMutationResponse;
+          setManagementFeedback({
+            kind: "error",
+            message: passwordResult.message ?? t("admin.users.feedback.passwordUpdateFailed"),
+          });
+          return;
+        }
+      }
+
+      setManagementFeedback({
+        kind: "success",
+        message:
+          trimmedEditPassword.length > 0
+            ? t("admin.users.feedback.updatedWithPassword")
+            : t("admin.users.feedback.updated"),
+      });
       cancelEditingUser();
       await loadAdminData();
     } catch {
@@ -568,6 +606,21 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
                             <option value="admin">{t("common.roles.admin")}</option>
                           </select>
                         </label>
+
+                        {user.auth_type === "local" ? (
+                          <label>
+                            <span>{t("common.form.newPassword")}</span>
+                            <input
+                              minLength={6}
+                              onChange={(event) => setEditPassword(event.target.value)}
+                              placeholder={t("admin.users.editor.passwordPlaceholder")}
+                              type="password"
+                              value={editPassword}
+                            />
+                          </label>
+                        ) : (
+                          <p className="helper-text">{t("admin.users.editor.oauthPasswordInfo")}</p>
+                        )}
 
                         {editForm.role === "user" ? (
                           <BoardSelector

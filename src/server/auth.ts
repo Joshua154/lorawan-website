@@ -131,6 +131,16 @@ function validateManagedUserPayload(payload: UpdateUserPayload): { username: str
   };
 }
 
+function validatePassword(password: string): string {
+  const trimmedPassword = password.trim();
+
+  if (trimmedPassword.length < 6) {
+    throw new Error("Password must contain at least 6 characters.");
+  }
+
+  return trimmedPassword;
+}
+
 import { auth } from "./next-auth";
 
 type ExternalSessionUser = {
@@ -376,4 +386,70 @@ export async function deleteUser(actorId: number, userId: number): Promise<void>
   if (!result.rows[0]) {
     throw new Error("User not found.");
   }
+}
+
+export async function updateUserPasswordByAdmin(actorId: number, userId: number, password: string): Promise<void> {
+  if (!Number.isInteger(userId) || userId <= 0) {
+    throw new Error("Invalid user id.");
+  }
+
+  if (!Number.isInteger(actorId) || actorId <= 0) {
+    throw new Error("Invalid actor id.");
+  }
+
+  const nextPassword = validatePassword(password);
+
+  const { rows } = await query<Pick<UserRow, "id" | "auth_type">>(
+    "SELECT id, auth_type FROM users WHERE id = $1",
+    [userId],
+  );
+  const user = rows[0];
+
+  if (!user) {
+    throw new Error("User not found.");
+  }
+
+  if (user.auth_type !== "local") {
+    throw new Error("OAuth users do not have a local password.");
+  }
+
+  await query("UPDATE users SET password_hash = $1 WHERE id = $2", [hashSync(nextPassword, 12), userId]);
+}
+
+export async function changeOwnPassword(userId: number, currentPassword: string, newPassword: string): Promise<void> {
+  if (!Number.isInteger(userId) || userId <= 0) {
+    throw new Error("Invalid user id.");
+  }
+
+  const normalizedCurrentPassword = currentPassword.trim();
+
+  if (!normalizedCurrentPassword) {
+    throw new Error("Current password is required.");
+  }
+
+  const validatedNewPassword = validatePassword(newPassword);
+
+  if (normalizedCurrentPassword === validatedNewPassword) {
+    throw new Error("New password must be different from current password.");
+  }
+
+  const { rows } = await query<Pick<UserRow, "id" | "password_hash" | "auth_type">>(
+    "SELECT id, password_hash, auth_type FROM users WHERE id = $1",
+    [userId],
+  );
+  const user = rows[0];
+
+  if (!user) {
+    throw new Error("User not found.");
+  }
+
+  if (user.auth_type !== "local") {
+    throw new Error("OAuth users do not have a local password.");
+  }
+
+  if (!compareSync(normalizedCurrentPassword, user.password_hash)) {
+    throw new Error("Current password is incorrect.");
+  }
+
+  await query("UPDATE users SET password_hash = $1 WHERE id = $2", [hashSync(validatedNewPassword, 12), userId]);
 }

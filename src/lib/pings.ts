@@ -15,8 +15,15 @@ export const SIGNAL_COLORS: Record<SignalCategory, string> = {
   deadzone: "#111827",
 };
 
+export const HEXAGON_SIZES = {
+  "small": 0.0008,
+  "medium": 0.0015,
+  "large": 0.0035,
+  "xlarge": 0.007,
+}
+
 export const AUTO_REFRESH_SECONDS = 59;
-export const DEFAULT_HEX_SIZE = 0.0035;
+export const DEFAULT_HEX_SIZE = HEXAGON_SIZES.medium;
 export const DEFAULT_HEX_MIN_POINTS = 1;
 export const EMPTY_COLLECTION: PingFeatureCollection = {
   type: "FeatureCollection",
