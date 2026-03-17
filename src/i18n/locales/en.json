@@ -152,6 +152,7 @@
 	"map.hexagon.effectiveAverage": "Effective avg:",
     "map.hexagon.pointAvg": "Avg: {avg} dBm",
 	"map.hexagon.restricted": "Restricted guest view",
+    "map.hexagon.pointCount": "Points: {count}",
 
 	"login.title": "LoRaWAN Dashboard",
 	"login.heading": "Sign in",
