@@ -165,7 +165,7 @@
 	"map.hexagon.title": "Hexagon",
 	"map.hexagon.realAverage": "Real avg:",
 	"map.hexagon.effectiveAverage": "Effective avg:",
-    "map.hexagon.pointAvg": "Avg: {avg} dBm",
+    "map.hexagon.pointAvg": "Ø: {avg} dBm",
 	"map.hexagon.restricted": "Restricted guest view",
     "map.hexagon.pointCount": "Points: {count}",
 
