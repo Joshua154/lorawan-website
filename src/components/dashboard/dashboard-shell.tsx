@@ -195,7 +195,7 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
 
     let nextNewFeatureKeys: string[] = [];
     if (checkForNew && latestTimestampRef.current) {
-      nextNewFeatureKeys = nextSortedFeatures
+      nextNewFeatureKeys = nextNetworkFeatures
         .filter((feature) => Date.parse(feature.properties.time) > Date.parse(latestTimestampRef.current ?? ""))
         .map(buildFeatureKey);
     }
@@ -204,7 +204,7 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
     // setRestrictedHexagons([]);
     setCountdown(data.nextUpdateInSeconds || AUTO_REFRESH_SECONDS);
     setNewFeatureKeys(nextNewFeatureKeys);
-    latestTimestampRef.current = nextSortedFeatures.at(-1)?.properties.time ?? null;
+    latestTimestampRef.current = nextNetworkFeatures.at(-1)?.properties.time ?? null;
 
     const previousMaxIndex = previousMaxIndexRef.current;
     
@@ -359,7 +359,9 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
     const cutoff = Date.now() - windowMs;
     const firstIndex = networkSortedFeatures.findIndex((f) => Date.parse(f.properties.time) >= cutoff);
     const startIndex = firstIndex === -1 ? networkSortedFeatures.length - 1 : firstIndex;
-    setRange((current) => ({ start: startIndex, end: current.end }));
+    window.setTimeout(() => {
+      setRange((current) => ({ start: startIndex, end: current.end }));
+    }, 50);
   };
 
   const cyclePlaybackSpeed = () => {
@@ -486,6 +488,7 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
   };
 
   const maxRangeIndex = Math.max(networkSortedFeatures.length - 1, 0);
+  const isAtLiveEdge = range.end >= maxRangeIndex;
 
   return (
     <main className="dashboard-shell">
@@ -531,6 +534,7 @@ export function DashboardShell({ viewer }: DashboardShellProps) {
           calculationMode={calculationMode}
           features={filteredFeatures}
           followedFeature={followedFeature}
+          isAtLiveEdge={isAtLiveEdge}
           hexSize={hexSize}
           minHexPoints={minHexPoints}
           mode={mode}

@@ -51,6 +51,7 @@ type LoraWanMapProps = {
   mode: ViewMode;
   calculationMode: CalculationMode;
   followedFeature: PingFeature | null;
+  isAtLiveEdge: boolean;
   newFeatureKeys: string[];
   hexSize: number;
   minHexPoints: number;
@@ -90,6 +91,7 @@ export function LoraWanMap({
   mode,
   calculationMode,
   followedFeature,
+  isAtLiveEdge,
   newFeatureKeys,
   hexSize,
   minHexPoints,
@@ -102,7 +104,10 @@ export function LoraWanMap({
   const dynamicLayersRef = useRef<Layer[]>([]);
   const radarLayerRef = useRef<LayerGroup | null>(null);
   const animatedKeysRef = useRef<Set<string>>(new Set());
+  const currentFeaturesRef = useRef<PingFeature[]>(features);
   const [isMapReady, setIsMapReady] = useState(false);
+
+  useEffect(() => { currentFeaturesRef.current = features; }, [features]);
 
   const featureKeySet = useMemo(() => new Set(newFeatureKeys), [newFeatureKeys]);
 
@@ -164,8 +169,6 @@ export function LoraWanMap({
       map.removeLayer(layer);
     }
     dynamicLayersRef.current = [];
-    radarLayer.clearLayers();
-
     const isStabilized = calculationMode === "stabilized";
 
     if (mode === "markers") {
@@ -238,44 +241,6 @@ export function LoraWanMap({
         });
         clusterLayer.addLayer(marker);
 
-        if (featureKeySet.has(key) && !animatedKeysRef.current.has(key)) {
-          animatedKeysRef.current.add(key);
-          const pulse = L.circle([latitude, longitude], {
-            radius: 0,
-            color: "white",
-            weight: 2,
-            fillOpacity: 0,
-            opacity: 0.9,
-            interactive: false,
-          }).addTo(radarLayer);
-
-          const highlight = L.circleMarker([latitude, longitude], {
-            radius: 10,
-            color: "white",
-            weight: 3,
-            fillOpacity: 0,
-            interactive: false,
-          }).addTo(radarLayer);
-
-          const start = performance.now();
-          const duration = 14_000;
-          const maxRadius = 3_000;
-
-          const animate = (time: number) => {
-            const progress = Math.min((time - start) / duration, 1);
-            pulse.setRadius(maxRadius * progress);
-            pulse.setStyle({ opacity: 1 - progress });
-            if (progress < 1) {
-              requestAnimationFrame(animate);
-            }
-          };
-
-          requestAnimationFrame(animate);
-          window.setTimeout(() => {
-            radarLayer.removeLayer(pulse);
-            radarLayer.removeLayer(highlight);
-          }, 12_000);
-        }
       }
 
       clusterLayer.addTo(map);
@@ -430,10 +395,59 @@ export function LoraWanMap({
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!followedFeature || !map) return;
+    const L = leafletRef.current;
+    const radarLayer = radarLayerRef.current;
+    if (!isMapReady || !map || !L || !radarLayer) return;
+
+    radarLayer.clearLayers();
+    if (!isAtLiveEdge || newFeatureKeys.length === 0) return;
+
+    const coordMap = new Map<string, [number, number]>();
+    for (const feature of currentFeaturesRef.current) {
+      coordMap.set(buildFeatureKey(feature), feature.geometry.coordinates as [number, number]);
+    }
+
+    for (const key of newFeatureKeys) {
+      if (animatedKeysRef.current.has(key)) continue;
+      const coords = coordMap.get(key);
+      if (!coords) continue;
+
+      animatedKeysRef.current.add(key);
+      const [longitude, latitude] = coords;
+
+      const pulse = L.circle([latitude, longitude], {
+        radius: 0, color: "white", weight: 2, fillOpacity: 0, opacity: 0.9, interactive: false,
+      }).addTo(radarLayer);
+
+      const highlight = L.circleMarker([latitude, longitude], {
+        radius: 10, color: "white", weight: 3, fillOpacity: 0, interactive: false,
+      }).addTo(radarLayer);
+
+      const start = performance.now();
+      const duration = 14_000;
+      const maxRadius = 3_000;
+
+      const animate = (time: number) => {
+        const progress = Math.min((time - start) / duration, 1);
+        pulse.setRadius(maxRadius * progress);
+        pulse.setStyle({ opacity: 1 - progress });
+        if (progress < 1) requestAnimationFrame(animate);
+      };
+      requestAnimationFrame(animate);
+
+      window.setTimeout(() => {
+        radarLayer.removeLayer(pulse);
+        radarLayer.removeLayer(highlight);
+      }, 12_000);
+    }
+  }, [newFeatureKeys, isAtLiveEdge, isMapReady]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!followedFeature || !isAtLiveEdge || !map) return;
     const [longitude, latitude] = followedFeature.geometry.coordinates;
     map.flyTo([latitude, longitude], 18, { duration: 1.5 });
-  }, [followedFeature]);
+  }, [followedFeature, isAtLiveEdge]);
 
   return <div className="map-canvas" ref={containerRef} />;
 }
