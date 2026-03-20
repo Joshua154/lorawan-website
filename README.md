@@ -110,6 +110,8 @@ npm run dev
 
 Open `http://localhost:3000`.
 
+On startup, the server automatically applies any pending SQL migrations from `src/server/migrations/` and seeds the default admin account if no admin exists yet.
+
 ## Environment Variables
 
 | Variable | Required | Description |
@@ -130,9 +132,9 @@ Open `http://localhost:3000`.
 | `MQTT_PASSWORD` | No | MQTT password |
 | `MQTT_TOPIC` | No | MQTT topic to subscribe to (default: `application/+/device/+/event/up`) |
 
-## Default Admin Bootstrap
+### Default Admin Bootstrap
 
-On first startup, the app creates the database schema and seeds one local admin account if no admin exists yet.
+On first startup, the app applies the database migrations and seeds one local admin account if no admin exists yet.
 
 Default credentials:
 
@@ -145,6 +147,15 @@ Override them before the first run if needed:
 export LORAWAN_ADMIN_USERNAME="your-admin-name"
 export LORAWAN_ADMIN_PASSWORD="your-secure-password"
 ```
+
+### Database
+The database migrations are managed automatically by the server on startup. To manually apply or inspect migrations, see `src/server/migrations/`.
+
+#### Layout
+
+![LoRaWAN Dashboard Layout](./assets/database_layout.png)
+
+
 
 ## Authentication Modes
 
@@ -175,6 +186,7 @@ docker compose up -d --build
 Notes:
 
 - The container exposes port `3000`
+- The container copies `src/server/migrations/` into the runtime image so database migrations can be applied automatically
 - The `data/` directory is mounted to persist bundled data files
 - You still need a reachable PostgreSQL database via `DATABASE_URL`
 
