@@ -29,26 +29,8 @@ services:
         condition: service_healthy
     ports:
       - "3000:3000"
-    environment:
-      - NODE_ENV=production
-      - DATABASE_URL=postgresql://lorawan:lorawan@postgres:5432/lorawan
-      
-      # Optional: Override the initial default credentials
-      # - LORAWAN_ADMIN_USERNAME=admin
-      # - LORAWAN_ADMIN_PASSWORD=admin1234
-      
-      # Optional: Define standard origin to ensure tight request security limits
-      # - APP_URL=https://your-dashboard-domain.com
-
-      # Optional: Provide a custom log pull URL
-      # - LORAWAN_LOG_URL=http://stadtrandelfen.dsmynas.org:8008/test/2026_gps.log
-
-      # Optional: MQTT integration (ChirpStack)
-      # - MQTT_BROKER=your-broker-host
-      # - MQTT_PORT=8883
-      # - MQTT_USERNAME=your-username
-      # - MQTT_PASSWORD=your-password
-      # - MQTT_TOPIC=application/+/device/+/event/up
+    env_file:
+      - .env.local
 
 volumes:
   postgres_data:
