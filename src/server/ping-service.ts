@@ -4,7 +4,6 @@ import { listPingFeatureRows, replacePingFeatures, type DbPingRow } from "@/serv
 
 const CACHE_DURATION_MS = 30_000;
 const LOOKBACK_HOURS = 6;
-const DEFAULT_LOG_URL = "http://stadtrandelfen.dsmynas.org:8008/test/2026_gps.log";
 
 type CacheState = {
   lastLogUpdate: number;
@@ -533,7 +532,17 @@ export async function runRemoteUpdate(): Promise<UpdateResult> {
     };
   }
 
-  const logUrl = process.env.LORAWAN_LOG_URL ?? DEFAULT_LOG_URL;
+  const logUrl = process.env.LORAWAN_LOG_URL ?? null;
+  if (!logUrl) {
+    new Error("LORAWAN_LOG_URL environment variable is not set")
+    return {
+      status: "error",
+      added: 0,
+      updated: 0,
+      total: collection.features.length,
+      message: "Remote log URL is not configured",
+    };
+  }
   const response = await fetch(logUrl, { cache: "no-store" });
 
   if (!response.ok) {

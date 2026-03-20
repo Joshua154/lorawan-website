@@ -1,183 +1,260 @@
 # LoRaWAN Dashboard
 
-A modern Next.js dashboard for visualizing LoRaWAN GPS pings, managing board access, and importing field data.
+![License](https://img.shields.io/badge/license-All%20Rights%20Reserved-red.svg)
+![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)
+![React](https://img.shields.io/badge/React-19-blue?logo=react)
+![TypeScript](https://img.shields.io/badge/TypeScript-blue?logo=typescript)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14%2B-blue?logo=postgresql)
 
-It combines a live map UI, role-based access control, PostgreSQL-backed storage, and optional Keycloak login for OAuth-based access.
+A Next.js dashboard for visualizing and managing LoRaWAN GPS pings, managing user access, and importing field data from remote sources.
 
-## Highlights
+It combines PostgreSQL-backed storage, role-based permissions, local login, and optional Keycloak (OIDC) authentication for a robust and secure data management experience.
 
-- Live LoRaWAN map with marker, heatmap, and hexagon views
-- Role-based access for `admin`, `user`, and guest visitors
-- Local username/password login plus optional Keycloak sign-in
-- Board-level visibility controls for non-admin users
-- Manual board import over Web Serial
-- Automatic remote log polling and incremental ping updates
-- Reusable component structure with modular client/server helpers
+## Table of Contents
 
-## Tech Stack
-
-- `Next.js 16`
-- `React 19`
-- `TypeScript`
-- `PostgreSQL` via `pg`
-- `next-auth` with `Keycloak`
-- `Leaflet` + `react-leaflet`
-- `ESLint`
+- [Features](#features)
+- [Requirements](#requirements)
+- [Tech Stack](#tech-stack)
+- [Quick Start](#quick-start)
+- [Environment Variables](#environment-variables)
+- [Keycloak Configuration](#keycloak-configuration)
+- [License](#License)
 
 ## Features
 
-### Mapping
+- **Interactive Maps:** Displays LoRaWAN pings on a map (markers, heatmap, hexagons) using Leaflet.
+- **Role-Based Access Control:** Supports dynamic roles (`admin`, `user`, `guest`).
+- **Flexible Authentication:** Offers local username/password login and optional Keycloak (OIDC) sign-in.
+- **Data Ingestion:** Ingests data from remote log polling and optional ChirpStack MQTT uplinks.
+- **Granular Permissions:** Restricts non-admin users to view only their assigned boards.
 
-- Marker, heatmap, and hexagon rendering modes
-- Signal quality and stability filtering
-- Board and gateway filtering
-- Playback timeline for historical ping exploration
-- Guest-safe aggregated hexagon view
+## Requirements
 
-### Authentication
+- **Node.js**: 20+
+- **npm**: 10+
+- **PostgreSQL**: 14+ (or compatible)
 
-- Local session-based login for internal users
-- Optional OAuth login through Keycloak
-- Admin bootstrap account on first database initialization
-- Per-board authorization for regular users
+## Tech Stack
 
-### Data Flow
-
-- Polls a remote LoRaWAN log source on an interval
-- Normalizes pings into PostgreSQL tables
-- Recomputes signal stability bonus values
-- Exposes filtered datasets through API routes
-- Optionally subscribes to a ChirpStack MQTT broker for live ping ingestion
-
-### ChirpStack MQTT Integration
-
-- Optional live data ingestion via MQTT from a ChirpStack instance
-- Automatically processes incoming uplinks and inserts new pings
-- Configured entirely through environment variables in `.env.local`
-
-## Project Structure
-
-```text
-src/
-	app/                  Next.js app routes and API routes
-	components/
-		admin/              Admin-specific UI blocks
-		auth/               Login and auth UI
-		dashboard/          Dashboard controls and layout
-		i18n/               Language switcher UI
-		map/                Leaflet map rendering
-		ui/                 Reusable UI primitives
-	hooks/                Shared client hooks
-	i18n/                 Translation dictionaries and helpers
-	lib/                  Shared domain utilities and types
-	server/               Auth, database, and ping services
-	types/                Ambient TypeScript declarations
-data/
-	pings.geojson         Bundled dataset file
-```
+- **Framework:** Next.js 16 (React 19)
+- **Language:** TypeScript
+- **Database:** PostgreSQL (`pg`)
+- **Authentication:** NextAuth (`next-auth`) with Keycloak provider
+- **Mapping:** Leaflet & React Leaflet
 
 ## Quick Start
 
-### 1. Install dependencies
+### 1. Install Dependencies
+
+Clone this repository and install the project dependencies:
 
 ```bash
+git clone https://github.com/Joshua154/lorawan-website.git
+cd lorawan-website
 npm install
 ```
 
-### 2. Create environment file
+### 2. Configure Environment Variables
 
-Copy `example.env.local` to `.env.local` and fill in the values.
+Create your local environment configuration:
 
 ```bash
 cp example.env.local .env.local
 ```
 
+**Required Variables:**
+- `DATABASE_URL`: Connection string for your PostgreSQL instance.
+- `AUTH_SECRET`: A secure random string for NextAuth.
+- `LORAWAN_LOG_URL`: The Url of the Log File
+
+**Optional Keycloak Variables:**
+- `KEYCLOAK_ID`, `KEYCLOAK_SECRET`, `KEYCLOAK_ISSUER`
+
 ### 3. Start PostgreSQL
 
-Use your own PostgreSQL instance and set `DATABASE_URL` accordingly.
+Ensure you point `DATABASE_URL` to a reachable PostgreSQL instance. You can use Docker to spin one up quickly.
 
-Example from `example.env.local`:
-
+Example `.env.local` snippet:
 ```env
-DATABASE_URL=postgresql://lorawan:lorawan@localhost:5432/lorawan
+DATABASE_URL=postgresql://lorawan:lorawan@postgres:5432/lorawan
 ```
 
-### 4. Run the app
+### 4. Run the Dev Server
+
+start running a Postgres Instance e.g.:
+```bash
+docker compose up -d postgres
+```
+
+Start the development server:
 
 ```bash
 npm run dev
 ```
 
-Open `http://localhost:3000`.
-
-On startup, the server automatically applies any pending SQL migrations from `src/server/migrations/` and seeds the default admin account if no admin exists yet.
+Open [http://localhost:3000](http://localhost:3000) in your browser. 
+On startup, pending database migrations in `src/server/migrations/` will be applied automatically.
 
 ## Environment Variables
 
 | Variable | Required | Description |
 | --- | --- | --- |
 | `DATABASE_URL` | Yes | PostgreSQL connection string |
-| `AUTH_SECRET` | Yes | Secret used by `next-auth` |
-| `KEYCLOAK_ID` | For Keycloak | Keycloak client ID |
-| `KEYCLOAK_SECRET` | For Keycloak | Keycloak client secret |
-| `KEYCLOAK_ISSUER` | For Keycloak | Keycloak realm issuer URL |
-| `LORAWAN_ADMIN_USERNAME` | No | Initial admin username, only used when no admin exists |
-| `LORAWAN_ADMIN_PASSWORD` | No | Initial admin password, only used when no admin exists |
-| `APP_URL` | Recommended in deployed setups | Trusted origin used for request-origin validation |
-| `NEXT_PUBLIC_APP_URL` | Optional | Fallback trusted origin if `APP_URL` is not set |
-| `LORAWAN_LOG_URL` | No | Overrides the default remote log source |
+| `AUTH_SECRET` | Yes | Secret used by NextAuth |
+| `KEYCLOAK_ID` | Keycloak only | Keycloak client ID |
+| `KEYCLOAK_SECRET` | Keycloak only | Keycloak client secret |
+| `KEYCLOAK_ISSUER` | Keycloak only | Keycloak realm issuer URL |
+| `LORAWAN_ADMIN_USERNAME` | No | Initial admin username when no admin exists |
+| `LORAWAN_ADMIN_PASSWORD` | No | Initial admin password when no admin exists |
+| `APP_URL` | Recommended | Trusted origin for origin validation |
+| `NEXTAUTH_URL` | Recommended | Canonical public URL used by NextAuth/Auth.js |
+| `AUTH_TRUST_HOST` | Recommended (reverse proxy) | Trust forwarded host/proto headers |
+| `NEXT_PUBLIC_APP_URL` | Optional | Fallback trusted origin if `APP_URL` is missing |
+| `LORAWAN_LOG_URL` | No | Overrides default remote log source |
 | `MQTT_BROKER` | No | ChirpStack MQTT broker hostname |
-| `MQTT_PORT` | No | MQTT broker port (default: 1883) |
+| `MQTT_PORT` | No | MQTT broker port |
 | `MQTT_USERNAME` | No | MQTT username |
 | `MQTT_PASSWORD` | No | MQTT password |
-| `MQTT_TOPIC` | No | MQTT topic to subscribe to (default: `application/+/device/+/event/up`) |
+| `MQTT_TOPIC` | No | MQTT topic (default: `application/+/device/+/event/up`) |
+| `RELEASE_TIMESTAMP` | No | Build/release timestamp metadata |
 
-### Default Admin Bootstrap
+## Keycloak Configuration
 
-On first startup, the app applies the database migrations and seeds one local admin account if no admin exists yet.
+This app uses NextAuth with the Keycloak provider from `src/server/next-auth.ts`.
 
-Default credentials:
+### 1. Create realm and client
 
-- username: `admin`
-- password: `admin1234`
+In Keycloak Admin Console:
 
-Override them before the first run if needed:
+1. Create or choose a realm.
+2. Create a client (OIDC).
+3. Set `Client ID` to match `KEYCLOAK_ID`.
+4. Set `Client authentication` to enabled (confidential client) so a client secret is issued.
 
-```bash
-export LORAWAN_ADMIN_USERNAME="your-admin-name"
-export LORAWAN_ADMIN_PASSWORD="your-secure-password"
+### 2. Configure redirect URLs
+
+Use your app base URL from `APP_URL`/`NEXTAUTH_URL`.
+
+- Development redirect URI: `http://localhost:3000/api/auth/callback/keycloak`
+- Production redirect URI: `https://your-domain/api/auth/callback/keycloak`
+
+Recommended Keycloak client values:
+
+- Valid redirect URIs:
+    - `http://localhost:3000/api/auth/callback/keycloak`
+    - `https://your-domain/api/auth/callback/keycloak`
+- Web origins:
+    - `http://localhost:3000`
+    - `https://your-domain`
+
+### 3. Set env variables
+
+Populate these in `.env.local`:
+
+```env
+KEYCLOAK_ID=your-client-id
+KEYCLOAK_SECRET=your-client-secret
+KEYCLOAK_ISSUER=https://keycloak.example.com/realms/your-realm
+NEXTAUTH_URL=https://your-domain
+APP_URL=https://your-domain
+AUTH_SECRET=replace-with-strong-random-secret
 ```
 
-### Database
-The database migrations are managed automatically by the server on startup. To manually apply or inspect migrations, see `src/server/migrations/`.
+Issuer format must be the realm issuer URL (not just the Keycloak root).
+e.g.: 
+```
+https://localhost:8080/realms/master
+```
 
-#### Layout
+### 4. Verify login flow
 
-![LoRaWAN Dashboard Layout](./assets/database_layout.png)
-
-
+1. Start the app using `npm run dev`.
+2. Open the login page.
+3. Click "Sign in with Keycloak".
+4. After successful authentication, you will be redirected to the dashboard (`/`).
 
 ## Authentication Modes
 
 ### Local auth
 
-- Uses `/api/auth/login`
+- Endpoint: `/api/auth/login`
 - Creates a server-managed session cookie
-- Best for internal accounts managed in the admin panel
+- Best for internal users managed from the admin panel
 
 ### Keycloak auth
 
-- Configured through `next-auth`
-- Uses the provider setup in `src/server/next-auth.ts`
+- Configured in `src/server/next-auth.ts`
+- Callback URL pattern: `<NEXTAUTH_URL>/api/auth/callback/keycloak`
 - Can coexist with local auth users
 
-An example standalone Keycloak setup is included in `keycloak-compose.yml`.
+## Default Admin Bootstrap
+
+If no admin user exists, one local admin account is seeded on first startup.
+
+Defaults (from `example.env.local`):
+
+- Username: `admin`
+- Password: `admin1234`
+
+Override before first run in `.env.local`.
+
+## Database
+
+- Migrations: `src/server/migrations/`
+- Applied automatically during server startup
+
+Schema diagram:
+
+### Layout
+```mermaid
+erDiagram
+
+    USERS {
+        integer id PK
+        text username
+        text password_hash
+        text role
+        timestamp created_at
+        text auth_type
+        text oauth_provider
+        text oauth_subject
+    }
+
+    SESSIONS {
+        text id PK
+        integer user_id FK
+        timestamp created_at
+        timestamp expires_at
+    }
+
+    USER_BOARDS {
+        integer user_id FK
+        text board_id FK
+    }
+
+    PING_FEATURES {
+        integer feature_id PK
+        text board_id
+        integer counter
+        text gateway_name
+        integer rssi
+        float snr
+        timestamp observed_at
+        float longitude
+        float latitude
+        integer rssi_stabilized
+        integer rssi_bonus
+        text network
+    }
+
+    USERS ||--o{ SESSIONS : has
+    USERS ||--o{ USER_BOARDS : owns
+    USER_BOARDS }o--|| PING_FEATURES : references_board
+```
 
 ## Docker
 
-The repo includes a production-oriented `Dockerfile` and a `docker-compose.yml` for running the dashboard container.
-
-Build and run the app container:
+Build and run with Docker Compose:
 
 ```bash
 docker compose up -d --build
@@ -185,14 +262,11 @@ docker compose up -d --build
 
 Notes:
 
-- The container exposes port `3000`
-- The container copies `src/server/migrations/` into the runtime image so database migrations can be applied automatically
-- The `data/` directory is mounted to persist bundled data files
-- You still need a reachable PostgreSQL database via `DATABASE_URL`
+- Container exposes port `3000`
+- Runtime image includes `src/server/migrations/` so migrations can run
+- You still need a reachable PostgreSQL database (`DATABASE_URL`)
 
-## Developer Workflow
-
-### Scripts
+## Scripts
 
 ```bash
 npm run dev
@@ -201,43 +275,26 @@ npm run start
 npm run lint
 ```
 
-### Recommended checks
-
-```bash
-npm run lint
-npm run build
-```
-
 ## API Overview
 
-High-level route groups:
-
-- `src/app/api/auth/*` — local login/logout and NextAuth integration
-- `src/app/api/pings/*` — dataset access, summaries, manual imports, and remote updates
-- `src/app/api/users/*` — admin-only user management
+- `src/app/api/auth/*`: Local login/logout and NextAuth handler
+- `src/app/api/pings/*`: Ping retrieval, summaries, manual imports, update triggers
+- `src/app/api/users/*`: Admin user management
 
 ## Security Notes
 
-- Mutating API routes validate request origin using `APP_URL` or forwarded host headers
+- Mutating API routes validate request origin (`APP_URL` or fallback host headers)
 - JSON endpoints enforce `application/json`
 - Passwords are hashed with `bcryptjs`
-- Regular users only receive pings for their assigned boards
+- Non-admin users only receive pings for boards they are assigned to
 
 ## Localization
 
-Translations live in:
-
-- `src/i18n/locales/en.json`
-- `src/i18n/locales/de.json`
-
-The client-side translation provider is wired in `src/app/layout.tsx`.
-
-## Notes for Contributors
-
-- Prefer shared helpers in `src/lib/`, `src/hooks/`, and `src/components/ui/` before adding new one-off logic
-- Keep API auth checks centralized in `src/server/api-auth.ts`
-- Keep admin and dashboard flows modular rather than growing page-level components further
+- English: `src/i18n/locales/en.json`
+- German: `src/i18n/locales/de.json`
 
 ## License
 
-No license file is currently included in this repository.
+Copyright (c) 2026. All Rights Reserved.
+
+This application is proprietary and confidential. No part of this software, including source code, documentation, or associated files, may be reproduced, distributed, or transmitted in any form or by any means, without the prior written permission of the owner.
