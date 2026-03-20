@@ -1,24 +1,10 @@
 import { isValidCoordinate, summarizeCollection } from "@/lib/pings";
 import type { PingFeature, PingFeatureCollection, PingSummary, UpdateResult } from "@/lib/types";
-import { query, replacePingFeatures } from "@/server/database";
+import { listPingFeatureRows, replacePingFeatures, type DbPingRow } from "@/server/database";
 
 const CACHE_DURATION_MS = 30_000;
 const LOOKBACK_HOURS = 6;
 const DEFAULT_LOG_URL = "http://stadtrandelfen.dsmynas.org:8008/test/2026_gps.log";
-
-type PingRow = {
-  board_id: string;
-  counter: number;
-  gateway_name: string | null;
-  rssi: number;
-  snr: number | null;
-  observed_at: string | Date;
-  longitude: number;
-  latitude: number;
-  rssi_stabilized: number | null;
-  rssi_bonus: number | null;
-  network: string | null;
-};
 
 type CacheState = {
   lastLogUpdate: number;
@@ -57,7 +43,7 @@ function toIsoString(value: string | Date): string {
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 }
 
-function mapPingRow(row: PingRow): PingFeature {
+function mapPingRow(row: DbPingRow): PingFeature {
   return {
     type: "Feature",
     geometry: {
@@ -79,13 +65,7 @@ function mapPingRow(row: PingRow): PingFeature {
 }
 
 export async function loadFeatureCollection(): Promise<PingFeatureCollection> {
-  const { rows } = await query<PingRow>(
-    `
-      SELECT board_id, counter, gateway_name, rssi, snr, observed_at, longitude, latitude, rssi_stabilized, rssi_bonus, network
-      FROM ping_features
-      ORDER BY observed_at ASC, feature_id ASC
-    `,
-  );
+  const rows = await listPingFeatureRows();
 
   return {
     type: "FeatureCollection",
