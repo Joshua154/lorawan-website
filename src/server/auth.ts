@@ -29,6 +29,7 @@ import {
 
 const SESSION_COOKIE_NAME = "lorawan_session";
 const SESSION_DURATION_MS = 1000 * 60 * 60 * 24 * 14;
+const DEFAULT_ADMIN_ROLE_KEYCLOAK = "lorawan-admin";
 
 type UserRow = DbUserRow;
 
@@ -37,6 +38,7 @@ type ExternalSessionUser = {
   provider?: string;
   email?: string | null;
   name?: string | null;
+  roles?: string[];
 };
 
 function toIsoString(value: string | Date): string {
@@ -77,8 +79,8 @@ function getPreferredExternalUsername(user: ExternalSessionUser, provider: strin
   return user.name?.trim() || user.email?.trim() || `${provider}:${subject}`;
 }
 
-async function upsertOauthUserForSession(provider: string, subject: string, preferredUsername: string): Promise<SessionUser> {
-  const row = await upsertOauthUser(provider, subject, preferredUsername);
+async function upsertOauthUserForSession(provider: string, subject: string, preferredUsername: string, isAdmin: boolean = false): Promise<SessionUser> {
+  const row = await upsertOauthUser(provider, subject, preferredUsername, isAdmin);
   return toSessionUser(await mapUser(row));
 }
 
@@ -163,7 +165,9 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
     const subject = userObj.id?.trim();
 
     if (provider && subject) {
-      return upsertOauthUserForSession(provider, subject, getPreferredExternalUsername(userObj, provider, subject));
+      const adminRole = process.env.KEYCLOAK_ADMIN_ROLE || DEFAULT_ADMIN_ROLE_KEYCLOAK;
+      const isAdmin = userObj.roles?.includes(adminRole) ?? false;
+      return upsertOauthUserForSession(provider, subject, getPreferredExternalUsername(userObj, provider, subject), isAdmin);
     }
   }
 

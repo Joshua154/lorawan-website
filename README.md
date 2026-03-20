@@ -104,6 +104,7 @@ On startup, pending database migrations in `src/server/migrations/` will be appl
 | `KEYCLOAK_ID` | Keycloak only | Keycloak client ID |
 | `KEYCLOAK_SECRET` | Keycloak only | Keycloak client secret |
 | `KEYCLOAK_ISSUER` | Keycloak only | Keycloak realm issuer URL |
+| `KEYCLOAK_ADMIN_ROLE` | Optional | Keycloak role name required to grant admin rights (defaults to `lorawan-admin`) |
 | `LORAWAN_ADMIN_USERNAME` | No | Initial admin username when no admin exists |
 | `LORAWAN_ADMIN_PASSWORD` | No | Initial admin password when no admin exists |
 | `APP_URL` | Recommended | Trusted origin for origin validation |
@@ -172,6 +173,18 @@ https://localhost:8080/realms/master
 2. Open the login page.
 3. Click "Sign in with Keycloak".
 4. After successful authentication, you will be redirected to the dashboard (`/`).
+
+### 5. Role Syncing (Admin Access)
+
+To grant a Keycloak user admin privileges in the dashboard, you need to assign them the specific admin role. By default, this role is `lorawan-admin`, but you can customize it by setting the `KEYCLOAK_ADMIN_ROLE` environment variable.
+
+1. In the Keycloak Admin Console, navigate to your Realm -> **Clients**.
+2. Select your client (the one matching `KEYCLOAK_ID`).
+3. Go to the **Roles** tab and click **Create Role**.
+4. Name the role exactly `lorawan-admin` (or match your `KEYCLOAK_ADMIN_ROLE` setting) and save.
+5. Go to **Users**, select the user you want to make an admin, and navigate to the **Role mapping** tab.
+6. Click **Assign role**, filter by clients, and assign the `lorawan-admin` role (or your custom role) to the user.
+7. *Note*: Ensure your client scopes are configured to map client roles into the user profile/token so the application can read them during login.
 
 ## Authentication Modes
 

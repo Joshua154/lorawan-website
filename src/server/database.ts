@@ -397,16 +397,23 @@ export async function upsertOauthUser(
   provider: string,
   subject: string,
   preferredUsername: string,
+  isAdmin: boolean = false
 ): Promise<DbUserRow> {
   await ensureDatabaseReady();
 
   return withTransaction(async (client) => {
     const existing = await getOauthUserByIdentityOnClient(client, provider, subject);
+    const newRole = isAdmin ? 'admin' : 'user';
 
     if (existing) {
-      if (preferredUsername && preferredUsername !== existing.username) {
-        await client.query("UPDATE users SET username = $1 WHERE id = $2", [preferredUsername, existing.id]);
-        existing.username = preferredUsername;
+      const usernameChanged = preferredUsername && preferredUsername !== existing.username;
+      const roleChanged = existing.role !== newRole;
+
+      if (usernameChanged || roleChanged) {
+        const usernameToSet = usernameChanged ? preferredUsername : existing.username;
+        await client.query("UPDATE users SET username = $1, role = $2 WHERE id = $3", [usernameToSet, newRole, existing.id]);
+        existing.username = usernameToSet;
+        existing.role = newRole;
       }
 
       return existing;
@@ -415,10 +422,10 @@ export async function upsertOauthUser(
     const createdResult = await client.query<DbUserRow>(
       `
         INSERT INTO users (username, password_hash, role, auth_type, oauth_provider, oauth_subject)
-        VALUES ($1, '', 'user', 'oauth', $2, $3)
+        VALUES ($1, '', $2, 'oauth', $3, $4)
         RETURNING id, username, role, created_at, auth_type, oauth_provider, oauth_subject
       `,
-      [preferredUsername, provider, subject],
+      [preferredUsername, newRole, provider, subject],
     );
 
     return createdResult.rows[0];
