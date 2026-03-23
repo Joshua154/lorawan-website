@@ -105,6 +105,7 @@ export function LoraWanMap({
   const radarLayerRef = useRef<LayerGroup | null>(null);
   const animatedKeysRef = useRef<Set<string>>(new Set());
   const currentFeaturesRef = useRef<PingFeature[]>(features);
+  const lastFollowedKeyRef = useRef<string | null>(null);
   const [isMapReady, setIsMapReady] = useState(false);
 
   useEffect(() => { currentFeaturesRef.current = features; }, [features]);
@@ -444,7 +445,15 @@ export function LoraWanMap({
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!followedFeature || !isAtLiveEdge || !map) return;
+    if (!followedFeature || !isAtLiveEdge || !map) {
+      if (!followedFeature) {
+        lastFollowedKeyRef.current = null;
+      }
+      return;
+    }
+    const key = buildFeatureKey(followedFeature);
+    if (key === lastFollowedKeyRef.current) return;
+    lastFollowedKeyRef.current = key;
     const [longitude, latitude] = followedFeature.geometry.coordinates;
     map.flyTo([latitude, longitude], 18, { duration: 1.5 });
   }, [followedFeature, isAtLiveEdge]);
