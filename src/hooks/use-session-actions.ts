@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback } from "react";
+import { apiUrl } from "@/lib/api-url";
 
 export function useSessionActions() {
   const router = useRouter();
@@ -17,7 +18,7 @@ export function useSessionActions() {
   }, [router]);
 
   const logout = useCallback(async () => {
-    await fetch("/api/auth/logout", { method: "POST" });
+    await fetch(apiUrl("/api/auth/logout"), { method: "POST" });
     redirectHome();
   }, [redirectHome]);
 
