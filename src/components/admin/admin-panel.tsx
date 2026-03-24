@@ -346,6 +346,9 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
           <div className="viewer-actions admin-toolbar-actions">
             <span className="role-badge admin">{t("common.roles.admin")}</span>
             <div className="admin-toolbar-links">
+              <Link className="secondary-button nav-link-button" href="/admin">
+                {t("admin.users.navigation.backToStatistics")}
+              </Link>
               <Link className="secondary-button nav-link-button" href="/">
                 {t("admin.navigation.backToDashboard")}
               </Link>
