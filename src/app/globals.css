@@ -838,12 +838,35 @@ label {
 .stats-legend {
   display: grid;
   gap: 0.65rem;
+  width: min(100%, 24rem);
+  justify-self: center;
 }
 
 .stats-legend-item {
   display: flex;
   align-items: flex-start;
   gap: 0.55rem;
+  text-align: left;
+  width: 100%;
+  color: inherit;
+  cursor: pointer;
+  border: 1px solid transparent;
+  border-radius: 0.85rem;
+  padding: 0.55rem 0.65rem;
+  background: color-mix(in srgb, var(--surface-strong) 90%, transparent);
+  transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
+}
+
+.stats-legend-item:hover,
+.stats-legend-item:focus-visible {
+  transform: translateY(-2px);
+  border-color: var(--segment-color, var(--border));
+  background: color-mix(in srgb, var(--segment-color, var(--accent-soft)) 10%, var(--surface-strong));
+  outline: none;
+}
+
+.stats-legend-item:active {
+  transform: translateY(0);
 }
 
 .stats-legend-dot {
@@ -852,6 +875,27 @@ label {
   border-radius: 999px;
   margin-top: 0.35rem;
   flex-shrink: 0;
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.stats-legend-item:hover .stats-legend-dot,
+.stats-legend-item:focus-visible .stats-legend-dot {
+  transform: scale(1.35);
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--segment-color, var(--accent-soft)) 22%, transparent);
+}
+
+.stats-legend-rank {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2rem;
+  padding: 0.18rem 0.5rem;
+  margin-bottom: 0.2rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--segment-color, var(--accent-soft)) 14%, transparent);
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
 }
 
 .stats-legend-item p {
@@ -1263,6 +1307,7 @@ label {
 
   .stats-pie-layout {
     grid-template-columns: 1fr;
+    gap: 0.85rem;
   }
 
   .timeline-shell {

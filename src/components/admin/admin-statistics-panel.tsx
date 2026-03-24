@@ -7,7 +7,7 @@ import { FormMessage } from "@/components/ui/form-message";
 import type { ManagedUser, PingSummary, SessionUser } from "@/lib/types";
 import { useTranslation } from "@/i18n/useTranslation";
 import { useSessionActions } from "@/hooks/use-session-actions";
-import { PieChart, PieSegment, PieChartProps } from "@/components/stats/piechart";
+import { PieChart, PieSegment } from "@/components/stats/piechart";
 
 type AdminStatisticsPanelProps = {
   viewer: SessionUser;
@@ -76,6 +76,7 @@ export function AdminStatisticsPanel({ viewer }: AdminStatisticsPanelProps) {
     setFeedback(null);
 
     try {
+      // TODO: implement base Path for API calls
       const [summaryResponse, usersResponse] = await Promise.all([
         fetch("/api/pings/summary", { cache: "no-store" }),
         fetch("/api/users", { cache: "no-store" }),
