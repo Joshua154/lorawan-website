@@ -16,6 +16,7 @@ It combines PostgreSQL-backed storage, role-based permissions, local login, and 
 - [Requirements](#requirements)
 - [Tech Stack](#tech-stack)
 - [Quick Start](#quick-start)
+- [Docker Compose (Published Image)](#docker-compose-published-image)
 - [Environment Variables](#environment-variables)
 - [Keycloak Configuration](#keycloak-configuration)
 - [License](#License)
@@ -94,6 +95,58 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) in your browser. 
 On startup, pending database migrations in `src/server/migrations/` will be applied automatically.
+
+## Docker Compose (Published Image)
+
+If you want to run the app from the published container image (instead of building locally), use a dedicated compose file like this:
+
+```yaml
+services:
+    postgres:
+        image: postgres:16-alpine
+        container_name: lorawan-postgres
+        restart: unless-stopped
+        environment:
+            POSTGRES_DB: lorawan
+            POSTGRES_USER: lorawan
+            POSTGRES_PASSWORD: lorawan
+        ports:
+            - "5432:5432"
+        volumes:
+            - postgres_data:/var/lib/postgresql/data
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U lorawan -d lorawan"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+            start_period: 10s
+
+    lorawan-dashboard:
+        image: ghcr.io/joshua154/lorawan-website:latest
+        container_name: lorawan-dashboard
+        restart: unless-stopped
+        pull_policy: always
+        depends_on:
+            postgres:
+                condition: service_healthy
+        ports:
+            - "3000:3000"
+        env_file:
+            - .env.local
+
+volumes:
+    postgres_data:
+```
+
+Save it as `docker-compose.published.yml`, then run:
+
+```bash
+cp example.env.local .env.local
+docker compose -f docker-compose.published.yml pull
+docker compose -f docker-compose.published.yml up -d
+```
+
+For immutable deploys, you can replace `:latest` with a specific commit image tag (the workflow also publishes SHA tags).
 
 ## Environment Variables
 
