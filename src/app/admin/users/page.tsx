@@ -1,11 +1,11 @@
 import { redirect } from "next/navigation";
 
-import { AdminStatisticsPanel } from "@/components/admin/admin-statistics-panel";
+import { AdminPanel } from "@/components/admin/admin-panel";
 import { getCurrentUser } from "@/server/auth";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminPage() {
+export default async function AdminUsersPage() {
   const user = await getCurrentUser();
 
   if (!user) {
@@ -16,5 +16,5 @@ export default async function AdminPage() {
     redirect("/");
   }
 
-  return <AdminStatisticsPanel viewer={user} />;
+  return <AdminPanel viewer={user} />;
 }

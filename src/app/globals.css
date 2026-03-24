@@ -766,6 +766,125 @@ label {
   margin-top: 1rem;
 }
 
+.stats-page-shell {
+  gap: 1.25rem;
+}
+
+.stats-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.stats-overview-grid .admin-card {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.stats-overview-grid .admin-card span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.stats-overview-grid .admin-card strong {
+  font-size: 1.4rem;
+}
+
+.stats-charts-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.stats-chart-card {
+  display: grid;
+  gap: 1rem;
+  align-content: start;
+  min-width: 0;
+}
+
+.stats-chart-card > * {
+  min-width: 0;
+}
+
+.stats-pie {
+  width: min(18rem, 100%);
+  aspect-ratio: 1;
+  position: relative;
+  margin: 0 auto;
+  overflow: hidden;
+}
+
+.stats-pie canvas {
+  width: 100% !important;
+  height: 100% !important;
+  position: relative;
+  z-index: 2;
+}
+
+/* .stats-pie-center {
+  width: 62%;
+  aspect-ratio: 1;
+  border-radius: 999px;
+  background: var(--surface-strong);
+  display: grid;
+  place-items: center;
+  text-align: center;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.15);
+  position: absolute;
+  inset: 44% auto auto 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1;
+  pointer-events: none;
+} */
+
+.stats-subsection {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.stats-subsection-title {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.stats-chart-canvas {
+  min-height: 15rem;
+}
+
+.stats-chart-canvas-sm {
+  min-height: 12rem;
+}
+
+.stats-table {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.stats-table-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.6rem;
+  align-items: center;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--surface-strong);
+}
+
+.stats-table-row strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.stats-summary-grid {
+  margin-top: 0;
+}
+
 .admin-board-chip {
   padding: 0.45rem 0.7rem;
   border-radius: 999px;
@@ -828,8 +947,10 @@ label {
   bottom: 1.25rem;
   transform: translateX(-50%);
   z-index: 15;
-  width: min(54rem, calc(100vw - 2rem));
+  width: min(54rem, calc(100dvw - 2rem));
+  max-width: calc(100% - 2rem);
   padding: 1rem;
+  box-sizing: border-box;
   background: var(--surface);
   backdrop-filter: blur(12px);
 }
@@ -1030,6 +1151,14 @@ label {
   .admin-user-filters {
     grid-template-columns: 1fr;
   }
+
+  .stats-overview-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .stats-charts-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 768px) {
@@ -1066,20 +1195,22 @@ label {
 
   .viewer-actions {
     width: 100%;
-    flex-direction: row;
-    justify-content: space-between;
-    align-items: center;
+    flex-direction: column;
+    justify-content: stretch;
+    align-items: stretch;
   }
 
   .viewer-links,
   .admin-toolbar-links {
     width: 100%;
     justify-content: stretch;
+    display: grid;
+    grid-template-columns: 1fr;
   }
 
   .viewer-links > *,
   .admin-toolbar-links > * {
-    flex: 1;
+    width: 100%;
   }
 
   .admin-page {
@@ -1102,8 +1233,57 @@ label {
     grid-template-columns: 1fr;
   }
 
+  .admin-toolbar,
+  .admin-toolbar > *,
+  .admin-page-shell,
+  .stats-overview-grid,
+  .stats-overview-grid .admin-card,
+  .stats-charts-grid,
+  .summary-grid {
+    min-width: 0;
+  }
+
+  .stats-overview-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .stats-chart-card .admin-card-header {
+    grid-template-columns: 1fr;
+  }
+
+  .stats-chart-card .admin-card-header .secondary-button {
+    width: 100%;
+  }
+
+  .stats-chart-canvas {
+    min-height: 12rem;
+  }
+
+  .stats-chart-canvas-sm {
+    min-height: 10rem;
+  }
+
+  .stats-pie {
+    width: min(14rem, 100%);
+  }
+
+  .stats-table-row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .stats-table-row > span:last-child {
+    grid-column: 2;
+    justify-self: start;
+    color: var(--muted);
+    font-size: 0.9rem;
+  }
+
   .timeline-shell {
-    width: calc(100vw - 1rem);
+    left: 0.5rem;
+    right: 0.5rem;
+    width: auto;
+    max-width: none;
+    transform: none;
     bottom: 4rem;
     padding: 0.85rem;
     border-radius: 1.25rem;
@@ -1125,5 +1305,19 @@ label {
     flex: 1;
     max-width: 10rem;
     min-height: 3rem;
+  }
+}
+
+@media (max-width: 560px) {
+  .stats-overview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .stats-page-shell {
+    gap: 1rem;
+  }
+
+  .stats-pie {
+    width: min(12.5rem, 100%);
   }
 }
