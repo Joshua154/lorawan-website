@@ -20,6 +20,7 @@ import { FormMessage } from "@/components/ui/form-message";
 import type { DatasetResponse, ManagedUser, PingSummary, SessionUser } from "@/lib/types";
 import { useTranslation } from "@/i18n/useTranslation";
 import { useSessionActions } from "@/hooks/use-session-actions";
+import { apiUrl } from "@/lib/api-url";
 
 type AdminStatisticsPanelProps = {
   viewer: SessionUser;
@@ -49,11 +50,10 @@ export function AdminStatisticsPanel({ viewer }: AdminStatisticsPanelProps) {
     setFeedback(null);
 
     try {
-      // TODO: implement base Path for API calls
       const [summaryResponse, usersResponse, pingsResponse] = await Promise.all([
-        fetch("/api/pings/summary", { cache: "no-store" }),
-        fetch("/api/users", { cache: "no-store" }),
-        fetch("/api/pings", { cache: "no-store" }),
+        fetch(apiUrl("/api/pings/summary"), { cache: "no-store" }),
+        fetch(apiUrl("/api/users"), { cache: "no-store" }),
+        fetch(apiUrl("/api/pings"), { cache: "no-store" }),
       ]);
 
       if (summaryResponse.status === 401 || usersResponse.status === 401 || pingsResponse.status === 401) {
