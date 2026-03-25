@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { apiUrl } from "@/lib/api-url";
 import { useTranslation } from "@/i18n/useTranslation";
 
 export function LoginForm() {
@@ -18,7 +19,7 @@ export function LoginForm() {
     setErrorMessage(null);
 
     try {
-      const response = await fetch("/api/auth/login", {
+      const response = await fetch(apiUrl("/api/auth/login"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password }),

@@ -26,6 +26,7 @@ import {
   toUpdateUserPayload,
   toggleStringSelection,
 } from "@/lib/users";
+import { apiUrl } from "@/lib/api-url";
 import { useTranslation } from "@/i18n/useTranslation";
 import { useSessionActions } from "@/hooks/use-session-actions";
 
@@ -88,8 +89,8 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
 
     try {
       const [usersResponse, summaryResponse] = await Promise.all([
-        fetch("/api/users", { cache: "no-store" }),
-        fetch("/api/pings/summary", { cache: "no-store" }),
+        fetch(apiUrl("/api/users"), { cache: "no-store" }),
+        fetch(apiUrl("/api/pings/summary"), { cache: "no-store" }),
       ]);
 
       if (usersResponse.status === 401 || summaryResponse.status === 401) {
@@ -184,7 +185,7 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
     try {
       const payload = toCreateUserPayload(userForm);
 
-      const response = await fetch("/api/users", {
+      const response = await fetch(apiUrl("/api/users"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -227,7 +228,7 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
     try {
       const payload = toUpdateUserPayload(editForm);
 
-      const response = await fetch(`/api/users/${userId}`, {
+      const response = await fetch(apiUrl(`/api/users/${userId}`), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -252,7 +253,7 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
       const trimmedEditPassword = editPassword.trim();
 
       if (trimmedEditPassword.length > 0) {
-        const passwordResponse = await fetch(`/api/users/${userId}/password`, {
+        const passwordResponse = await fetch(apiUrl(`/api/users/${userId}/password`), {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ password: trimmedEditPassword }),
@@ -303,7 +304,7 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
     setManagementFeedback(null);
 
     try {
-      const response = await fetch(`/api/users/${user.id}`, { method: "DELETE" });
+      const response = await fetch(apiUrl(`/api/users/${user.id}`), { method: "DELETE" });
       const result = (await response.json()) as UserMutationResponse;
 
       if (response.status === 401) {

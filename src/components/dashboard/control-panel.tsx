@@ -7,6 +7,7 @@ import { CollapsibleSection } from "@/components/ui/collapsible-section";
 import { FormMessage } from "@/components/ui/form-message";
 import { Modal } from "@/components/ui/modal";
 import { RoleBadge } from "@/components/ui/role-badge";
+import { apiUrl } from "@/lib/api-url";
 import { useTranslation } from "@/i18n/useTranslation";
 import { AUTO_REFRESH_SECONDS } from "@/lib/pings";
 import { sortNumericStrings } from "@/lib/users";
@@ -148,7 +149,7 @@ export function ControlPanel({
     setIsUpdatingPassword(true);
 
     try {
-      const response = await fetch("/api/auth/password", {
+      const response = await fetch(apiUrl("/api/auth/password"), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ currentPassword, newPassword }),

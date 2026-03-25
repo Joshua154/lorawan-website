@@ -21,6 +21,7 @@ import { TimelineControls, type TimeFilter } from "@/components/dashboard/timeli
 import { LoraWanMap } from "@/components/map/lorawan-map";
 import { Modal } from "@/components/ui/modal";
 import { useTranslation } from "@/i18n/useTranslation";
+import { apiUrl } from "@/lib/api-url";
 import { useSessionActions } from "@/hooks/use-session-actions";
 
 type RangeState = {
@@ -166,7 +167,7 @@ export function DashboardShell({ viewer, releaseMillisecondsRemaining }: Dashboa
       searchParams.set("network", selectedNetwork);
     }
 
-    const response = await fetch(`/api/pings${searchParams.size > 0 ? `?${searchParams.toString()}` : ""}`, { cache: "no-store" });
+    const response = await fetch(apiUrl(`/api/pings${searchParams.size > 0 ? `?${searchParams.toString()}` : ""}`), { cache: "no-store" });
 
     if (response.status === 401) {
       redirectToLogin();
@@ -455,7 +456,7 @@ export function DashboardShell({ viewer, releaseMillisecondsRemaining }: Dashboa
       return;
     }
 
-    const response = await fetch("/api/pings/manual", {
+    const response = await fetch(apiUrl("/api/pings/manual"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(extractedPings),
