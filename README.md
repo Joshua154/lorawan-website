@@ -164,6 +164,7 @@ For immutable deploys, you can replace `:latest` with a specific commit image ta
 | `NEXTAUTH_URL` | Recommended | Canonical public URL used by NextAuth/Auth.js |
 | `AUTH_TRUST_HOST` | Recommended (reverse proxy) | Trust forwarded host/proto headers |
 | `NEXT_PUBLIC_APP_URL` | Optional | Fallback trusted origin if `APP_URL` is missing |
+| `NEXT_PUBLIC_BASE_PATH` | Optional | Base path for the application (e.g. `/lorawan`) if hosted under a sub-path |
 | `LORAWAN_LOG_URL` | No | Overrides default remote log source |
 | `MQTT_BROKER` | No | ChirpStack MQTT broker hostname |
 | `MQTT_PORT` | No | MQTT broker port |
@@ -171,6 +172,14 @@ For immutable deploys, you can replace `:latest` with a specific commit image ta
 | `MQTT_PASSWORD` | No | MQTT password |
 | `MQTT_TOPIC` | No | MQTT topic (default: `application/+/device/+/event/up`) |
 | `RELEASE_TIMESTAMP` | No | Build/release timestamp metadata |
+
+### Base Path Configuration
+
+If you need to host the application under a sub-path instead of the domain root (e.g., `https://example.com/lorawan`), you can use the `NEXT_PUBLIC_BASE_PATH` environment variable.
+
+1. Set `NEXT_PUBLIC_BASE_PATH=/lorawan` in your `.env.local` or Docker environment.
+2. The Next.js application will prefix all internal routes (both frontend and API) with this path.
+3. Keep in mind that when running behind a reverse proxy (like Nginx or Traefik), you'll need to route requests starting with this base path to the Next.js container without stripping the `/lorawan` prefix.
 
 ## Keycloak Configuration
 
