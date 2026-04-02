@@ -1,12 +1,10 @@
 import NextAuth from "next-auth"
 import KeycloakProvider from "next-auth/providers/keycloak"
 
-const basePath = process.env.NEXT_PUBLIC_BASE_PATH 
-  ? `${process.env.NEXT_PUBLIC_BASE_PATH}/api/auth`
-  : "/api/auth"
+const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  basePath,
+  basePath: `${basePath}/api/auth`, 
   providers: [
     KeycloakProvider({
       clientId: process.env.KEYCLOAK_ID!,
@@ -25,6 +23,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
+    async redirect({ url, baseUrl }) {
+      if (url === baseUrl || url === `${baseUrl}/`) {
+        return `${baseUrl}${basePath}`;
+      }
+      if (url.startsWith("/")) {
+        return url.startsWith(basePath) ? `${baseUrl}${url}` : `${baseUrl}${basePath}${url}`;
+      }
+      if (url.startsWith(baseUrl)) return url;
+      
+      return `${baseUrl}${basePath}`;
+    },
     async jwt({ token, account, profile }) {
       const sessionToken = token as typeof token & {
         provider?: string;
@@ -70,7 +79,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
   },
 })
-
 
 type Profile = {
   sub: string;

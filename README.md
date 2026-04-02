@@ -123,6 +123,11 @@ services:
 
     lorawan-dashboard:
         image: ghcr.io/joshua154/lorawan-website:latest
+        build:
+            context: .
+            dockerfile: Dockerfile
+            args:
+                NEXT_PUBLIC_BASE_PATH: ${NEXT_PUBLIC_BASE_PATH}
         container_name: lorawan-dashboard
         restart: unless-stopped
         pull_policy: always
@@ -142,6 +147,7 @@ Save it as `docker-compose.published.yml`, then run:
 
 ```bash
 cp example.env.local .env.local
+printf "NEXT_PUBLIC_BASE_PATH=/lora-scanner\n" > .env
 docker compose -f docker-compose.published.yml pull
 docker compose -f docker-compose.published.yml up -d
 ```
@@ -161,7 +167,7 @@ For immutable deploys, you can replace `:latest` with a specific commit image ta
 | `LORAWAN_ADMIN_USERNAME` | No | Initial admin username when no admin exists |
 | `LORAWAN_ADMIN_PASSWORD` | No | Initial admin password when no admin exists |
 | `APP_URL` | Recommended | Trusted origin for origin validation |
-| `NEXTAUTH_URL` | Recommended | Canonical public URL used by NextAuth/Auth.js |
+| `NEXTAUTH_URL` | Recommended | Canonical public origin used by NextAuth/Auth.js (without `/api/auth` path) |
 | `AUTH_TRUST_HOST` | Recommended (reverse proxy) | Trust forwarded host/proto headers |
 | `NEXT_PUBLIC_APP_URL` | Optional | Fallback trusted origin if `APP_URL` is missing |
 | `NEXT_PUBLIC_BASE_PATH` | Optional | Base path for the application (e.g. `/lorawan`) if hosted under a sub-path |
@@ -177,9 +183,15 @@ For immutable deploys, you can replace `:latest` with a specific commit image ta
 
 If you need to host the application under a sub-path instead of the domain root (e.g., `https://example.com/lorawan`), you can use the `NEXT_PUBLIC_BASE_PATH` environment variable.
 
-1. Set `NEXT_PUBLIC_BASE_PATH=/lorawan` in your `.env.local` or Docker environment.
+1. Set `NEXT_PUBLIC_BASE_PATH=/lorawan` in your `.env.local` (runtime) and in `.env` (build-time variable for Docker Compose substitution).
 2. The Next.js application will prefix all internal routes (both frontend and API) with this path.
 3. Keep in mind that when running behind a reverse proxy (like Nginx or Traefik), you'll need to route requests starting with this base path to the Next.js container without stripping the `/lorawan` prefix.
+
+For Docker image builds, pass the value as a build arg so Next.js can read it during `npm run build`:
+
+```bash
+docker build --build-arg NEXT_PUBLIC_BASE_PATH=/lorawan -t your-image:tag .
+```
 
 ## Keycloak Configuration
 
@@ -201,11 +213,16 @@ Use your app base URL from `APP_URL`/`NEXTAUTH_URL`.
 - Development redirect URI: `http://localhost:3000/api/auth/callback/keycloak`
 - Production redirect URI: `https://your-domain/api/auth/callback/keycloak`
 
+If you deploy under a base path (for example `/lora-scanner`), include it in the callback path:
+
+- `https://your-domain/lora-scanner/api/auth/callback/keycloak`
+
 Recommended Keycloak client values:
 
 - Valid redirect URIs:
     - `http://localhost:3000/api/auth/callback/keycloak`
     - `https://your-domain/api/auth/callback/keycloak`
+    - `https://your-domain/lora-scanner/api/auth/callback/keycloak`
 - Web origins:
     - `http://localhost:3000`
     - `https://your-domain`
@@ -220,8 +237,17 @@ KEYCLOAK_SECRET=your-client-secret
 KEYCLOAK_ISSUER=https://keycloak.example.com/realms/your-realm
 NEXTAUTH_URL=https://your-domain
 APP_URL=https://your-domain
+NEXT_PUBLIC_BASE_PATH=/lora-scanner
 AUTH_SECRET=replace-with-strong-random-secret
 ```
+
+With this setup, the app computes the OAuth redirect proxy URL as:
+
+`APP_URL + NEXT_PUBLIC_BASE_PATH + /api/auth`
+
+Example:
+
+`https://your-domain/lora-scanner/api/auth`
 
 Issuer format must be the realm issuer URL (not just the Keycloak root).
 e.g.: 
