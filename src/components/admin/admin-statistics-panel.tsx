@@ -35,19 +35,65 @@ type FormFeedback = {
   message: string;
 };
 
+type CachedStatisticsSnapshot = {
+  summary: PingSummary;
+  users: ManagedUser[];
+  pointsOverTime: TimeSeriesEntry[];
+  savedAt: string;
+};
+
+const STATISTICS_CACHE_KEY = "admin-statistics-snapshot-v1";
+
+function readStatisticsCache(): CachedStatisticsSnapshot | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(STATISTICS_CACHE_KEY);
+
+    if (!raw) {
+      return null;
+    }
+
+    return JSON.parse(raw) as CachedStatisticsSnapshot;
+  } catch {
+    return null;
+  }
+}
+
+function writeStatisticsCache(payload: CachedStatisticsSnapshot) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(STATISTICS_CACHE_KEY, JSON.stringify(payload));
+  } catch {
+    // Ignore cache write failures (e.g. storage limits or private mode restrictions).
+  }
+}
+
 export function AdminStatisticsPanel({ viewer }: AdminStatisticsPanelProps) {
   const [summary, setSummary] = useState<PingSummary | null>(null);
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [pointsOverTime, setPointsOverTime] = useState<TimeSeriesEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [feedback, setFeedback] = useState<FormFeedback | null>(null);
 
   const { t } = useTranslation();
   const { logout, redirectHome, redirectToLogin } = useSessionActions();
 
-  const loadStatistics = useCallback(async () => {
-    setIsLoading(true);
-    setFeedback(null);
+  const loadStatistics = useCallback(async (options?: { background?: boolean }) => {
+    const shouldRefreshInBackground = options?.background ?? false;
+
+    if (shouldRefreshInBackground) {
+      setIsRefreshing(true);
+    } else {
+      setIsLoading(true);
+      setFeedback(null);
+    }
 
     try {
       const [summaryResponse, usersResponse, pingsResponse] = await Promise.all([
@@ -76,19 +122,40 @@ export function AdminStatisticsPanel({ viewer }: AdminStatisticsPanelProps) {
       const pingsPayload = (await pingsResponse.json()) as DatasetResponse;
 
       const pingsFeatures = pingsPayload.accessMode === "authenticated" ? pingsPayload.collection.features : [];
+      const pointsOverTimeEntries = buildPointsOverTime(pingsFeatures, POINTS_OVER_TIME_DAYS);
 
       setSummary(summaryPayload);
       setUsers(usersPayload.users);
-      setPointsOverTime(buildPointsOverTime(pingsFeatures, POINTS_OVER_TIME_DAYS));
+      setPointsOverTime(pointsOverTimeEntries);
+
+      writeStatisticsCache({
+        summary: summaryPayload,
+        users: usersPayload.users,
+        pointsOverTime: pointsOverTimeEntries,
+        savedAt: new Date().toISOString(),
+      });
     } catch {
-      setFeedback({ kind: "error", message: t("admin.stats.feedback.loadFailed") });
+      if (!shouldRefreshInBackground) {
+        setFeedback({ kind: "error", message: t("admin.stats.feedback.loadFailed") });
+      }
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
     }
   }, [redirectHome, redirectToLogin, t]);
 
   useEffect(() => {
-    void loadStatistics();
+    const cachedSnapshot = readStatisticsCache();
+    const hasCachedSnapshot = Boolean(cachedSnapshot);
+
+    if (cachedSnapshot) {
+      setSummary(cachedSnapshot.summary);
+      setUsers(cachedSnapshot.users);
+      setPointsOverTime(cachedSnapshot.pointsOverTime);
+      setIsLoading(false);
+    }
+
+    void loadStatistics({ background: hasCachedSnapshot });
   }, [loadStatistics]);
 
   const deviceSegments = useMemo(() => buildDeviceSegments(summary, t), [summary, t]);
@@ -109,7 +176,7 @@ export function AdminStatisticsPanel({ viewer }: AdminStatisticsPanelProps) {
           dataQualityEntries={dataQualityEntries}
           deviceSegments={deviceSegments}
           gatewayEntries={gatewayEntries}
-          isLoading={isLoading}
+          isLoading={isLoading || isRefreshing}
           onRefresh={() => void loadStatistics()}
           pointsOverTime={pointsOverTime}
           pointsSummary={pointsSummary}
