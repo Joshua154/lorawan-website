@@ -26,7 +26,7 @@ It combines PostgreSQL-backed storage, role-based permissions, local login, and 
 - **Interactive Maps:** Displays LoRaWAN pings on a map (markers, heatmap, hexagons) using Leaflet.
 - **Role-Based Access Control:** Supports dynamic roles (`admin`, `user`, `guest`).
 - **Flexible Authentication:** Offers local username/password login and optional Keycloak (OIDC) sign-in.
-- **Data Ingestion:** Ingests data from remote log polling and optional ChirpStack MQTT uplinks.
+- **Data Ingestion:** Ingests data via MQTT from ChirpStack and/or TTN (The Things Network), with optional remote log polling as fallback.
 - **Granular Permissions:** Restricts non-admin users to view only their assigned boards.
 
 ## Requirements
@@ -171,12 +171,17 @@ For immutable deploys, you can replace `:latest` with a specific commit image ta
 | `AUTH_TRUST_HOST` | Recommended (reverse proxy) | Trust forwarded host/proto headers |
 | `NEXT_PUBLIC_APP_URL` | Optional | Fallback trusted origin if `APP_URL` is missing |
 | `NEXT_PUBLIC_BASE_PATH` | Optional | Base path for the application (e.g. `/lorawan`) if hosted under a sub-path |
-| `LORAWAN_LOG_URL` | No | Overrides default remote log source |
+| `LORAWAN_LOG_URL` | No | Remote log file URL (legacy/fallback ingestion) |
 | `MQTT_BROKER` | No | ChirpStack MQTT broker hostname |
-| `MQTT_PORT` | No | MQTT broker port |
-| `MQTT_USERNAME` | No | MQTT username |
-| `MQTT_PASSWORD` | No | MQTT password |
-| `MQTT_TOPIC` | No | MQTT topic (default: `application/+/device/+/event/up`) |
+| `MQTT_PORT` | No | ChirpStack MQTT broker port (default: `8883`) |
+| `MQTT_USERNAME` | No | ChirpStack MQTT username |
+| `MQTT_PASSWORD` | No | ChirpStack MQTT password |
+| `MQTT_TOPIC` | No | ChirpStack MQTT topic (default: `application/+/device/+/event/up`) |
+| `TTN_MQTT_BROKER` | No | TTN MQTT broker hostname (e.g. `eu1.cloud.thethings.network`) |
+| `TTN_MQTT_PORT` | No | TTN MQTT broker port (default: `8883`) |
+| `TTN_MQTT_USERNAME` | No | TTN MQTT username (`{application-id}@ttn`) |
+| `TTN_MQTT_PASSWORD` | No | TTN MQTT password (API key from TTN Console) |
+| `TTN_MQTT_TOPIC` | No | TTN MQTT topic (e.g. `v3/{application-id}@ttn/devices/+/up`) |
 | `RELEASE_TIMESTAMP` | No | Build/release timestamp metadata |
 
 ### Base Path Configuration
@@ -192,6 +197,43 @@ For Docker image builds, pass the value as a build arg so Next.js can read it du
 ```bash
 docker build --build-arg NEXT_PUBLIC_BASE_PATH=/lorawan -t your-image:tag .
 ```
+
+### MQTT Data Ingestion
+
+The dashboard supports two independent MQTT connections for receiving LoRaWAN pings in real-time. Both are optional and can run simultaneously.
+
+#### ChirpStack MQTT
+
+Set the `MQTT_BROKER`, `MQTT_USERNAME`, and `MQTT_PASSWORD` variables to connect to a ChirpStack MQTT broker. Pings received this way are stored with `network: "chirpstack"`.
+
+```env
+MQTT_BROKER=your-chirpstack-host.example.com
+MQTT_PORT=8883
+MQTT_USERNAME=your-username
+MQTT_PASSWORD=your-password
+MQTT_TOPIC=application/your-app-id/#
+```
+
+#### TTN (The Things Network) MQTT
+
+To receive pings from TTN v3, configure the `TTN_MQTT_*` variables. Pings are stored with `network: "ttn"`.
+
+1. In the [TTN Console](https://console.cloud.thethings.network), go to your Application > **API Keys** and create a key with "Read application traffic" permission.
+2. Add the following to `.env.local`:
+
+```env
+TTN_MQTT_BROKER=eu1.cloud.thethings.network
+TTN_MQTT_PORT=8883
+TTN_MQTT_USERNAME={application-id}@ttn
+TTN_MQTT_PASSWORD=NNSXS.your-api-key
+TTN_MQTT_TOPIC=v3/{application-id}@ttn/devices/+/up
+```
+
+Replace `{application-id}` with your actual TTN application ID and use `eu1` (or `us1`, `au1`, etc.) matching your TTN cluster.
+
+#### Network Distinction
+
+Each MQTT connection automatically tags pings with the correct network (`"ttn"` or `"chirpstack"`). No payload formatter changes are needed on the device side. The dashboard UI allows filtering by network.
 
 ## Keycloak Configuration
 
