@@ -73,7 +73,7 @@ function getPopupHtml(feature: PingFeature, calculationMode: CalculationMode, t:
       <hr style="margin: 6px 0; border: 0; border-top: 1px solid #e5e7eb;" />
       <div><strong>${t("map.popup.boardId")}</strong> ${feature.properties.boardID}</div>
       <div><strong>${t("map.popup.signalReal")}</strong> ${realRssi}${bonus}</div>
-      <div><strong>${t("map.popup.signalEffective")}</strong> ${effectiveRssi}</div>
+      ${feature.properties.rssi_bonus ? `<div><strong>${t("map.popup.signalEffective")}</strong> ${effectiveRssi}</div>` : ""}
       <div><strong>${t("map.popup.gateway")}</strong> ${gateway}</div>
       <div><strong>${t("map.popup.time")}</strong> ${new Intl.DateTimeFormat("de-DE", {
         day: "2-digit",
