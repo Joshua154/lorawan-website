@@ -268,7 +268,7 @@ async function insertPingRecords(client: PoolClient, records: PingFeature[]): Pr
       latitude: Number(feature.geometry.coordinates[1]),
       rssi_stabilized: feature.properties.rssi_stabilized == null ? null : Number(feature.properties.rssi_stabilized),
       rssi_bonus: feature.properties.rssi_bonus == null ? null : Number(feature.properties.rssi_bonus),
-      network: feature.properties.network === "chirpstack" ? "chirpstack" : null,
+      network: feature.properties.network ?? null,
     })));
 
     await client.query(
