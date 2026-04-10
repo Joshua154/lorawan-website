@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getRuntimeConfigValue } from "@/server/runtime-config";
 
-function getExpectedOrigin(request: NextRequest): string {
-  const configuredOrigin = process.env.APP_URL ?? process.env.NEXT_PUBLIC_APP_URL;
+async function getExpectedOrigin(request: NextRequest): Promise<string> {
+  const configuredOrigin = (await getRuntimeConfigValue("APP_URL")) ?? (await getRuntimeConfigValue("NEXT_PUBLIC_APP_URL"));
 
   if (configuredOrigin) {
     return new URL(configuredOrigin).origin;
@@ -20,14 +21,14 @@ function getExpectedOrigin(request: NextRequest): string {
   return `${protocol}://${host}`;
 }
 
-export function ensureTrustedOrigin(request: NextRequest): NextResponse | null {
+export async function ensureTrustedOrigin(request: NextRequest): Promise<NextResponse | null> {
   const origin = request.headers.get("origin");
 
   if (!origin) {
     return NextResponse.json({ message: "Missing Origin header." }, { status: 403 });
   }
 
-  if (origin !== getExpectedOrigin(request)) {
+  if (origin !== await getExpectedOrigin(request)) {
     return NextResponse.json({ message: "Untrusted request origin." }, { status: 403 });
   }
 

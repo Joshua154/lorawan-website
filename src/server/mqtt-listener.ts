@@ -1,6 +1,7 @@
 import mqtt from "mqtt";
 import { uploadManualPings } from "@/server/ping-service";
 import { queryPingTimes } from "@/server/database";
+import { getRuntimeConfigValue } from "@/server/runtime-config";
 import type { PingFeature, PingNetwork } from "@/lib/types";
 
 // ── Common intermediate type ────────────────────────────────────────────────
@@ -18,28 +19,50 @@ type ParsedMqttUplink = {
 // ── Parsers ─────────────────────────────────────────────────────────────────
 
 function parseChirpStackMessage(raw: unknown): ParsedMqttUplink | null {
-  const payload = raw as Record<string, any>;
-  const decoded = payload.object;
-  if (!decoded?.pings || decoded.pings.length === 0) return null;
+  const payload = raw as Record<string, unknown>;
+  const decoded = payload.object as
+    | {
+        boardID?: number;
+        pings?: Array<{ counter: number; latitude: number; longitude: number }>;
+      }
+    | undefined;
+  const firstRxInfo = Array.isArray(payload.rxInfo)
+    ? (payload.rxInfo[0] as { gatewayId?: string; rssi?: number; snr?: number } | undefined)
+    : undefined;
+  if (!decoded?.pings || decoded.pings.length === 0 || decoded.boardID == null) return null;
 
   return {
     network: "chirpstack",
     boardID: decoded.boardID,
-    gatewayId: payload.rxInfo?.[0]?.gatewayId ?? "chirpstack",
-    rssi: payload.rxInfo?.[0]?.rssi ?? -1,
-    snr: payload.rxInfo?.[0]?.snr ?? null,
-    baseTime: Date.parse(payload.time ?? "") || Date.now(),
+    gatewayId: firstRxInfo?.gatewayId ?? "chirpstack",
+    rssi: firstRxInfo?.rssi ?? -1,
+    snr: firstRxInfo?.snr ?? null,
+    baseTime: Date.parse(String(payload.time ?? "")) || Date.now(),
     pings: decoded.pings,
   };
 }
 
 function parseTtnMessage(raw: unknown): ParsedMqttUplink | null {
-  const payload = raw as Record<string, any>;
-  const uplink = payload.uplink_message;
+  const payload = raw as Record<string, unknown>;
+  const uplink = payload.uplink_message as
+    | {
+        decoded_payload?: {
+          boardID?: number;
+          pings?: Array<{ counter: number; latitude: number; longitude: number }>;
+        };
+        rx_metadata?: Array<{
+          gateway_ids?: {
+            gateway_id?: string;
+          };
+          rssi?: number;
+          snr?: number;
+        }>;
+      }
+    | undefined;
   if (!uplink) return null;
 
   const decoded = uplink.decoded_payload;
-  if (!decoded?.pings || decoded.pings.length === 0) return null;
+  if (!decoded?.pings || decoded.pings.length === 0 || decoded.boardID == null) return null;
 
   const rxMeta = uplink.rx_metadata?.[0];
 
@@ -49,7 +72,7 @@ function parseTtnMessage(raw: unknown): ParsedMqttUplink | null {
     gatewayId: rxMeta?.gateway_ids?.gateway_id ?? "ttn",
     rssi: rxMeta?.rssi ?? -1,
     snr: rxMeta?.snr ?? null,
-    baseTime: Date.parse(payload.received_at ?? "") || Date.now(),
+    baseTime: Date.parse(String(payload.received_at ?? "")) || Date.now(),
     pings: decoded.pings,
   };
 }
@@ -147,46 +170,51 @@ function createMqttListener(config: MqttListenerConfig): void {
 
 // ── Initialization ──────────────────────────────────────────────────────────
 
-// ChirpStack
-const CS_BROKER   = process.env.MQTT_BROKER;
-const CS_PORT     = process.env.MQTT_PORT ?? "8883";
-const CS_USERNAME = process.env.MQTT_USERNAME;
-const CS_PASSWORD = process.env.MQTT_PASSWORD;
-const CS_TOPIC    = process.env.MQTT_TOPIC ?? "application/57d96532-0c82-4f98-98f1-1778323c3e08/#";
+async function initializeMqttListeners(): Promise<void> {
+  // ChirpStack
+  const csBroker = await getRuntimeConfigValue("MQTT_BROKER");
+  const csPort = (await getRuntimeConfigValue("MQTT_PORT")) ?? "8883";
+  const csUsername = await getRuntimeConfigValue("MQTT_USERNAME");
+  const csPassword = await getRuntimeConfigValue("MQTT_PASSWORD");
+  const csTopic =
+    (await getRuntimeConfigValue("MQTT_TOPIC")) ?? "application/57d96532-0c82-4f98-98f1-1778323c3e08/#";
 
-if (!CS_BROKER || !CS_USERNAME || !CS_PASSWORD) {
-  console.warn("ChirpStack MQTT: MQTT_BROKER, MQTT_USERNAME oder MQTT_PASSWORD fehlen – Listener wird nicht gestartet.");
-} else {
-  createMqttListener({
-    name: "ChirpStack MQTT",
-    broker: CS_BROKER,
-    port: CS_PORT,
-    username: CS_USERNAME,
-    password: CS_PASSWORD,
-    topic: CS_TOPIC,
-    rejectUnauthorized: false,
-    parseMessage: parseChirpStackMessage,
-  });
+  if (!csBroker || !csUsername || !csPassword) {
+    console.warn("ChirpStack MQTT: MQTT_BROKER, MQTT_USERNAME oder MQTT_PASSWORD fehlen – Listener wird nicht gestartet.");
+  } else {
+    createMqttListener({
+      name: "ChirpStack MQTT",
+      broker: csBroker,
+      port: csPort,
+      username: csUsername,
+      password: csPassword,
+      topic: csTopic,
+      rejectUnauthorized: false,
+      parseMessage: parseChirpStackMessage,
+    });
+  }
+
+  // TTN
+  const ttnBroker = await getRuntimeConfigValue("TTN_MQTT_BROKER");
+  const ttnPort = (await getRuntimeConfigValue("TTN_MQTT_PORT")) ?? "8883";
+  const ttnUsername = await getRuntimeConfigValue("TTN_MQTT_USERNAME");
+  const ttnPassword = await getRuntimeConfigValue("TTN_MQTT_PASSWORD");
+  const ttnTopic = await getRuntimeConfigValue("TTN_MQTT_TOPIC");
+
+  if (!ttnBroker || !ttnUsername || !ttnPassword || !ttnTopic) {
+    console.warn("TTN MQTT: TTN_MQTT_BROKER, TTN_MQTT_USERNAME, TTN_MQTT_PASSWORD oder TTN_MQTT_TOPIC fehlen – Listener wird nicht gestartet.");
+  } else {
+    createMqttListener({
+      name: "TTN MQTT",
+      broker: ttnBroker,
+      port: ttnPort,
+      username: ttnUsername,
+      password: ttnPassword,
+      topic: ttnTopic,
+      rejectUnauthorized: true,
+      parseMessage: parseTtnMessage,
+    });
+  }
 }
 
-// TTN
-const TTN_BROKER   = process.env.TTN_MQTT_BROKER;
-const TTN_PORT     = process.env.TTN_MQTT_PORT ?? "8883";
-const TTN_USERNAME = process.env.TTN_MQTT_USERNAME;
-const TTN_PASSWORD = process.env.TTN_MQTT_PASSWORD;
-const TTN_TOPIC    = process.env.TTN_MQTT_TOPIC;
-
-if (!TTN_BROKER || !TTN_USERNAME || !TTN_PASSWORD || !TTN_TOPIC) {
-  console.warn("TTN MQTT: TTN_MQTT_BROKER, TTN_MQTT_USERNAME, TTN_MQTT_PASSWORD oder TTN_MQTT_TOPIC fehlen – Listener wird nicht gestartet.");
-} else {
-  createMqttListener({
-    name: "TTN MQTT",
-    broker: TTN_BROKER,
-    port: TTN_PORT,
-    username: TTN_USERNAME,
-    password: TTN_PASSWORD,
-    topic: TTN_TOPIC,
-    rejectUnauthorized: true,
-    parseMessage: parseTtnMessage,
-  });
-}
+void initializeMqttListeners();

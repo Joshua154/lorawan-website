@@ -44,6 +44,12 @@ type PingCounterTimeRow = {
   observed_at: Date;
 };
 
+type AppConfigRow = {
+  key: string;
+  value: string;
+  updated_at: string | Date;
+};
+
 export type DbUserRow = {
   id: number;
   username: string;
@@ -571,6 +577,44 @@ export async function getUserPasswordRecordById(userId: number): Promise<Pick<Db
 export async function updateUserPasswordHash(userId: number, passwordHash: string): Promise<void> {
   await ensureDatabaseReady();
   await query("UPDATE users SET password_hash = $1 WHERE id = $2", [passwordHash, userId]);
+}
+
+export async function listAppConfigEntries(): Promise<Array<{ key: string; value: string; updatedAt: string }>> {
+  await ensureDatabaseReady();
+  const { rows } = await query<AppConfigRow>(
+    "SELECT key, value, updated_at FROM app_config ORDER BY key ASC",
+  );
+
+  return rows.map((row) => ({
+    key: row.key,
+    value: row.value,
+    updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : new Date(row.updated_at).toISOString(),
+  }));
+}
+
+export async function saveAppConfigEntries(entries: Array<{ key: string; value: string }>): Promise<void> {
+  await ensureDatabaseReady();
+
+  await withTransaction(async (client) => {
+    const nextKeys = new Set(entries.map((entry) => entry.key));
+
+    if (nextKeys.size === 0) {
+      await client.query("DELETE FROM app_config");
+      return;
+    }
+
+    await client.query("DELETE FROM app_config WHERE key <> ALL($1::text[])", [[...nextKeys]]);
+
+    for (const entry of entries) {
+      await client.query(
+        `INSERT INTO app_config (key, value, updated_at)
+         VALUES ($1, $2, NOW())
+         ON CONFLICT (key)
+         DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+        [entry.key, entry.value],
+      );
+    }
+  });
 }
 
 export async function listPingFeatureRows(): Promise<DbPingRow[]> {

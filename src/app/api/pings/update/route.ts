@@ -7,7 +7,7 @@ import { ensureTrustedOrigin } from "@/server/request-security";
 export const dynamic = "force-dynamic";
 
 async function handleUpdate(request: NextRequest) {
-  const originError = ensureTrustedOrigin(request);
+  const originError = await ensureTrustedOrigin(request);
 
   if (originError) {
     return originError;

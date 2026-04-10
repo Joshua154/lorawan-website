@@ -6,6 +6,6 @@ export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
   const user = await getCurrentUser();
-  const releaseMillisecondsRemaining = getMillisecondsUntilRelease();
+  const releaseMillisecondsRemaining = await getMillisecondsUntilRelease();
   return <DashboardShell releaseMillisecondsRemaining={releaseMillisecondsRemaining} viewer={user} />;
 }

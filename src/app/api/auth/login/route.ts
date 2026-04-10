@@ -6,7 +6,7 @@ import { ensureJsonRequest, ensureTrustedOrigin } from "@/server/request-securit
 export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
-  const originError = ensureTrustedOrigin(request);
+  const originError = await ensureTrustedOrigin(request);
 
   if (originError) {
     return originError;

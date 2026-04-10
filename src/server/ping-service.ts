@@ -1,6 +1,7 @@
 import { isValidCoordinate, summarizeCollection } from "@/lib/pings";
 import type { PingFeature, PingFeatureCollection, PingSummary, UpdateResult } from "@/lib/types";
 import { listPingFeatureRows, replacePingFeatures, type DbPingRow } from "@/server/database";
+import { getRuntimeConfigValue } from "@/server/runtime-config";
 
 const CACHE_DURATION_MS = 30_000;
 const LOOKBACK_HOURS = 6;
@@ -532,7 +533,7 @@ export async function runRemoteUpdate(): Promise<UpdateResult> {
     };
   }
 
-  const logUrl = process.env.LORAWAN_LOG_URL ?? null;
+  const logUrl = (await getRuntimeConfigValue("LORAWAN_LOG_URL")) ?? null;
   if (!logUrl) {
     new Error("LORAWAN_LOG_URL environment variable is not set")
     return {
@@ -604,17 +605,34 @@ export async function uploadManualPings(features: PingFeature[]): Promise<{ adde
   return { added, updated };
 }
 
-export const releaseTimestamp = process.env.RELEASE_TIMESTAMP ? new Date(process.env.RELEASE_TIMESTAMP) : null;
-export function isReleased(): boolean {
+async function getReleaseTimestamp(): Promise<Date | null> {
+  const configuredValue = await getRuntimeConfigValue("RELEASE_TIMESTAMP");
+
+  if (!configuredValue) {
+    return null;
+  }
+
+  const timestamp = new Date(configuredValue);
+  return Number.isNaN(timestamp.getTime()) ? null : timestamp;
+}
+
+export async function isReleased(): Promise<boolean> {
+  const releaseTimestamp = await getReleaseTimestamp();
+
   if (!releaseTimestamp) {
     return true;
   }
+
   return Date.now() >= releaseTimestamp.getTime();
 }
-export function getMillisecondsUntilRelease(): number | null {
+
+export async function getMillisecondsUntilRelease(): Promise<number | null> {
+  const releaseTimestamp = await getReleaseTimestamp();
+
   if (!releaseTimestamp) {
     return null;
   }
+
   const ms = releaseTimestamp.getTime() - Date.now();
   return ms > 0 ? ms : 0;
 }

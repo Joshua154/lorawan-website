@@ -184,6 +184,15 @@ For immutable deploys, you can replace `:latest` with a specific commit image ta
 | `TTN_MQTT_TOPIC` | No | TTN MQTT topic (e.g. `v3/{application-id}@ttn/devices/+/up`) |
 | `RELEASE_TIMESTAMP` | No | Build/release timestamp metadata |
 
+### Runtime Configuration Overrides (Admin UI)
+
+Admins can now edit runtime configuration values in **Admin → Configuration** (`/admin/configurations`).
+
+- Values are persisted in PostgreSQL (`app_config` table).
+- Saved values override matching environment variables inside the running Node.js process.
+- Empty values in the form remove the database override and fall back to the original environment value.
+- Some settings are marked as restart-required in the UI (for example auth provider/bootstrap settings) because they are read during service initialization.
+
 ### Base Path Configuration
 
 If you need to host the application under a sub-path instead of the domain root (e.g., `https://example.com/lorawan`), you can use the `NEXT_PUBLIC_BASE_PATH` environment variable.

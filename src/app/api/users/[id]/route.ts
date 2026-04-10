@@ -8,7 +8,7 @@ import { ensureJsonRequest, ensureTrustedOrigin } from "@/server/request-securit
 export const dynamic = "force-dynamic";
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  const originError = ensureTrustedOrigin(request);
+  const originError = await ensureTrustedOrigin(request);
 
   if (originError) {
     return originError;
@@ -45,7 +45,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 }
 
 export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  const originError = ensureTrustedOrigin(request);
+  const originError = await ensureTrustedOrigin(request);
 
   if (originError) {
     return originError;

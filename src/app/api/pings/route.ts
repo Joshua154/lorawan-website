@@ -32,7 +32,7 @@ export async function GET(request: Request) {
   const { collection } = await getPings();
 
   if (!user) {
-    if (!isReleased()) {
+    if (!await isReleased()) {
       return NextResponse.json({
         accessMode: "guest",
         restrictedHexagons: [],

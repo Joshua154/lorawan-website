@@ -18,7 +18,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const originError = ensureTrustedOrigin(request);
+  const originError = await ensureTrustedOrigin(request);
 
   if (originError) {
     return originError;

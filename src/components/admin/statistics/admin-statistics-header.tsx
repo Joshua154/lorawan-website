@@ -22,6 +22,9 @@ export function AdminStatisticsHeader({ username, t, onLogout }: AdminStatistics
           <Link className="secondary-button nav-link-button" href="/admin/users">
             {t("admin.stats.navigation.manageUsers")}
           </Link>
+          <Link className="secondary-button nav-link-button" href="/admin/configurations">
+            {t("admin.stats.navigation.manageConfigurations")}
+          </Link>
           <Link className="secondary-button nav-link-button" href="/">
             {t("admin.navigation.backToDashboard")}
           </Link>

@@ -350,6 +350,9 @@ export function AdminPanel({ viewer }: AdminPanelProps) {
               <Link className="secondary-button nav-link-button" href="/admin">
                 {t("admin.users.navigation.backToStatistics")}
               </Link>
+              <Link className="secondary-button nav-link-button" href="/admin/configurations">
+                {t("admin.users.navigation.manageConfigurations")}
+              </Link>
               <Link className="secondary-button nav-link-button" href="/">
                 {t("admin.navigation.backToDashboard")}
               </Link>

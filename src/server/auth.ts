@@ -10,6 +10,7 @@ import type {
 } from "@/lib/types";
 import { normalizeBoardIds } from "@/lib/users";
 import { auth } from "./next-auth";
+import { getRuntimeConfigValue } from "@/server/runtime-config";
 import {
   cleanupExpiredSessions,
   createManagedUser,
@@ -165,7 +166,7 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
     const subject = userObj.id?.trim();
 
     if (provider && subject) {
-      const adminRole = process.env.KEYCLOAK_ADMIN_ROLE || DEFAULT_ADMIN_ROLE_KEYCLOAK;
+      const adminRole = (await getRuntimeConfigValue("KEYCLOAK_ADMIN_ROLE")) || DEFAULT_ADMIN_ROLE_KEYCLOAK;
       const isAdmin = userObj.roles?.includes(adminRole) ?? false;
       return upsertOauthUserForSession(provider, subject, getPreferredExternalUsername(userObj, provider, subject), isAdmin);
     }
