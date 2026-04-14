@@ -5,6 +5,17 @@ import { listPingFeatureRows, replacePingFeatures, type DbPingRow } from "@/serv
 const CACHE_DURATION_MS = 30_000;
 const LOOKBACK_HOURS = 6;
 
+// Serializes all read-modify-write operations on the feature collection to
+// prevent race conditions when multiple MQTT messages arrive concurrently.
+let collectionLock: Promise<void> = Promise.resolve();
+function withCollectionLock<T>(fn: () => Promise<T>): Promise<T> {
+  let release!: () => void;
+  const next = new Promise<void>((r) => { release = r; });
+  const acquired = collectionLock.then(() => fn());
+  collectionLock = acquired.then(release, release);
+  return acquired;
+}
+
 type CacheState = {
   lastLogUpdate: number;
   lastAddedCount: number;
@@ -518,7 +529,8 @@ export async function getPingSummary(): Promise<PingSummary> {
   return summarizeCollection(collection);
 }
 
-export async function runRemoteUpdate(): Promise<UpdateResult> {
+export function runRemoteUpdate(): Promise<UpdateResult> {
+  return withCollectionLock(async () => {
   const collection = await loadFeatureCollection();
   const now = Date.now();
 
@@ -591,17 +603,20 @@ export async function runRemoteUpdate(): Promise<UpdateResult> {
     updated,
     total: collection.features.filter((feature) => isValidCoordinate(feature.geometry.coordinates)).length,
   };
+  });
 }
 
-export async function uploadManualPings(features: PingFeature[]): Promise<{ added: number; updated: number }> {
-  const collection = await loadFeatureCollection();
-  const { added, updated } = updateMasterWithIncrementalBonus(features, collection);
+export function uploadManualPings(features: PingFeature[]): Promise<{ added: number; updated: number }> {
+  return withCollectionLock(async () => {
+    const collection = await loadFeatureCollection();
+    const { added, updated } = updateMasterWithIncrementalBonus(features, collection);
 
-  if (added > 0 || updated > 0) {
-    await saveFeatureCollection(collection);
-  }
+    if (added > 0 || updated > 0) {
+      await saveFeatureCollection(collection);
+    }
 
-  return { added, updated };
+    return { added, updated };
+  });
 }
 
 export const releaseTimestamp = process.env.RELEASE_TIMESTAMP ? new Date(process.env.RELEASE_TIMESTAMP) : null;
