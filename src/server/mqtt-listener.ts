@@ -66,6 +66,9 @@ async function processUplink(uplink: ParsedMqttUplink, topic: string, label: str
   const funklochCounters = validPings.filter(({ i }) => i > 0).map(({ p }) => Number(p.counter));
   const existingTimes = await queryPingTimes(String(boardID), funklochCounters, network);
 
+  // DEBUG: Log what's happening with historic pings
+  console.log(`[DEBUG-MQTT] board=${boardID} network=${network} current=${validPings[0]?.p.counter} historic=[${funklochCounters.join(",")}] inDB=[${[...existingTimes.keys()].join(",")}] willFunkloch=[${funklochCounters.filter((c) => !existingTimes.has(c)).join(",")}]`);
+
   let anchor = baseTime;
   let funklochOffset = 0;
 
@@ -101,7 +104,7 @@ async function processUplink(uplink: ParsedMqttUplink, topic: string, label: str
   });
 
   const result = await uploadManualPings(features);
-  console.log(`${label} [${topic}]: +${result.added} neu, ${result.updated} aktualisiert`);
+  console.log(`${label} [${topic}]: +${result.added} neu, ${result.updated} aktualisiert (features sent: ${features.length})`);
 }
 
 // ── Client factory ──────────────────────────────────────────────────────────
