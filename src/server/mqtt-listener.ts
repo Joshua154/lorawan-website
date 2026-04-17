@@ -63,45 +63,76 @@ async function processUplink(uplink: ParsedMqttUplink, topic: string, label: str
     .map((p, i) => ({ p, i }))
     .filter(({ p }) => p.latitude !== 0 || p.longitude !== 0);
 
-  const funklochCounters = validPings.filter(({ i }) => i > 0).map(({ p }) => Number(p.counter));
-  const existingTimes = await queryPingTimes(String(boardID), funklochCounters, network);
+  // Look up existing historic pings by the full identity key
+  // (board, counter, network, lat@5dec, lon@5dec). Only counters whose full
+  // key matches are returned – a board reboot that resets the counter will
+  // NOT cause a false match, because the GPS will differ.
+  const historicLookup = validPings
+    .filter(({ i }) => i > 0)
+    .map(({ p }) => ({
+      counter: Number(p.counter),
+      latitude: Number(p.latitude),
+      longitude: Number(p.longitude),
+    }));
+  const existingTimes = await queryPingTimes(String(boardID), historicLookup, network);
+
+  // DEBUG: Log what's happening with historic pings
+  const funklochCounters = historicLookup.map((p) => p.counter);
+  console.log(`[DEBUG-MQTT] board=${boardID} network=${network} current=${validPings[0]?.p.counter} historic=[${funklochCounters.join(",")}] inDB=[${[...existingTimes.keys()].join(",")}] willFunkloch=[${funklochCounters.filter((c) => !existingTimes.has(c)).join(",")}]`);
 
   let anchor = baseTime;
   let funklochOffset = 0;
 
-  const features: PingFeature[] = validPings.map(({ p, i }) => {
-    let time: string;
+  // Emit only features that are NOT already in the DB under the full identity
+  // key (board, counter, network, lat@5dec, lon@5dec). Historic pings that
+  // exist are skipped entirely – they only serve to update the anchor for
+  // subsequent new Funklöcher. Historic pings with a known counter but a
+  // different GPS (post-reboot case) are NOT in existingTimes and will be
+  // emitted as new Funklöcher – which is correct, because they are genuinely
+  // new pings that happen to share an old counter value.
+  const features: PingFeature[] = [];
 
+  for (const { p, i } of validPings) {
     if (i === 0) {
       anchor = baseTime;
       funklochOffset = 0;
-      time = new Date(baseTime).toISOString();
+      features.push({
+        type: "Feature",
+        geometry: { type: "Point", coordinates: [p.longitude, p.latitude] },
+        properties: {
+          boardID,
+          counter: p.counter,
+          gateway: gatewayId,
+          rssi,
+          snr: snr ?? undefined,
+          time: new Date(baseTime).toISOString(),
+          network,
+        },
+      });
     } else if (existingTimes.has(Number(p.counter))) {
+      // Historic ping already in DB – only update anchor, do not emit.
       anchor = existingTimes.get(Number(p.counter))!;
       funklochOffset = 0;
-      time = new Date(anchor).toISOString();
     } else {
       funklochOffset += 1;
-      time = new Date(anchor - funklochOffset * 1000).toISOString();
+      features.push({
+        type: "Feature",
+        geometry: { type: "Point", coordinates: [p.longitude, p.latitude] },
+        properties: {
+          boardID,
+          counter: p.counter,
+          gateway: "Funkloch-Upload (LoRaWAN)",
+          rssi: -1,
+          snr: undefined,
+          time: new Date(anchor - funklochOffset * 1000).toISOString(),
+          network,
+        },
+      });
     }
-
-    return {
-      type: "Feature",
-      geometry: { type: "Point", coordinates: [p.longitude, p.latitude] },
-      properties: {
-        boardID,
-        counter: p.counter,
-        gateway: i === 0 ? gatewayId : "Funkloch-Upload (LoRaWAN)",
-        rssi: i === 0 ? rssi : -1,
-        snr: i === 0 ? (snr ?? undefined) : undefined,
-        time,
-        network,
-      },
-    };
-  });
+  }
 
   const result = await uploadManualPings(features);
-  console.log(`${label} [${topic}]: +${result.added} neu, ${result.updated} aktualisiert`);
+  console.log(`${label} [${topic}]: +${result.added} neu, ${result.updated} aktualisiert (features sent: ${features.length})`);
 }
 
 // ── Client factory ──────────────────────────────────────────────────────────

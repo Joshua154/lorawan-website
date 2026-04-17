@@ -42,6 +42,8 @@ type UserPasswordLookupRow = {
 type PingCounterTimeRow = {
   counter: string;
   observed_at: Date;
+  latitude: string | number;
+  longitude: string | number;
 };
 
 export type DbUserRow = {
@@ -584,26 +586,66 @@ export async function listPingFeatureRows(): Promise<DbPingRow[]> {
   return rows;
 }
 
+/**
+ * Looks up existing pings by the full identity key:
+ *   (board_id, counter, network, latitude@5 decimals, longitude@5 decimals).
+ *
+ * Returns a Map<counter, observed_at_ms> containing only those incoming pings
+ * whose full 5-tuple matches an existing DB row. Counters that exist in the DB
+ * with a DIFFERENT GPS (e.g. after a board reboot that resets the counter) are
+ * intentionally NOT returned – the caller will treat them as new pings.
+ *
+ * GPS precision is 5 decimals (~1.1 m), which absorbs the ULP drift between
+ * the firmware's current-ping encoding and its historic-buffer encoding while
+ * still distinguishing physically different locations.
+ */
 export async function queryPingTimes(
   boardID: string,
-  counters: number[],
+  pings: Array<{ counter: number; latitude: number; longitude: number }>,
   network: "ttn" | "chirpstack",
 ): Promise<Map<number, number>> {
   await ensureDatabaseReady();
 
-  if (counters.length === 0) {
+  if (pings.length === 0) {
     return new Map();
   }
 
+  const counters = [...new Set(pings.map((p) => p.counter))];
+
   const { rows } = await query<PingCounterTimeRow>(
-    `SELECT counter, observed_at FROM ping_features WHERE board_id = $1 AND counter = ANY($2) AND network = $3`,
+    `SELECT counter, observed_at, latitude, longitude
+       FROM ping_features
+      WHERE board_id = $1 AND counter = ANY($2) AND network = $3`,
     [boardID, counters, network],
   );
 
   const map = new Map<number, number>();
 
   for (const row of rows) {
-    map.set(Number(row.counter), row.observed_at instanceof Date ? row.observed_at.getTime() : Date.parse(String(row.observed_at)));
+    const rowCounter = Number(row.counter);
+    const rowLat = Number(row.latitude);
+    const rowLon = Number(row.longitude);
+
+    // Find the incoming ping with this counter and compare GPS at 5 decimals.
+    for (const p of pings) {
+      if (p.counter !== rowCounter) continue;
+      if (
+        rowLat.toFixed(5) !== Number(p.latitude).toFixed(5) ||
+        rowLon.toFixed(5) !== Number(p.longitude).toFixed(5)
+      ) {
+        continue;
+      }
+      const timestamp =
+        row.observed_at instanceof Date
+          ? row.observed_at.getTime()
+          : Date.parse(String(row.observed_at));
+      // If multiple DB rows match (shouldn't happen after cleanup), keep the latest.
+      const existing = map.get(rowCounter);
+      if (existing === undefined || timestamp > existing) {
+        map.set(rowCounter, timestamp);
+      }
+      break;
+    }
   }
 
   return map;

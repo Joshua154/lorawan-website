@@ -5,6 +5,17 @@ import { listPingFeatureRows, replacePingFeatures, type DbPingRow } from "@/serv
 const CACHE_DURATION_MS = 30_000;
 const LOOKBACK_HOURS = 6;
 
+// Serializes all read-modify-write operations on the feature collection to
+// prevent race conditions when multiple MQTT messages arrive concurrently.
+let collectionLock: Promise<void> = Promise.resolve();
+function withCollectionLock<T>(fn: () => Promise<T>): Promise<T> {
+  let release!: () => void;
+  const next = new Promise<void>((r) => { release = r; });
+  const acquired = collectionLock.then(() => fn());
+  collectionLock = acquired.then(release, release);
+  return acquired;
+}
+
 type CacheState = {
   lastLogUpdate: number;
   lastAddedCount: number;
@@ -194,14 +205,25 @@ function updateMasterWithIncrementalBonus(
       const existingProperties = existingFeature.properties;
       const nextProperties = nextFeature.properties;
 
+      const existingNetwork = existingProperties.network === "chirpstack" ? "chirpstack" : "ttn";
+      const nextNetwork = nextProperties.network === "chirpstack" ? "chirpstack" : "ttn";
+
+      // Full identity match: (boardID, counter, network, lat@5dec, lon@5dec).
+      // All five must match because the firmware counter resets on reboot, so
+      // (board, counter, network) alone does NOT uniquely identify a ping –
+      // only the GPS coordinates distinguish pre- from post-reboot pings.
+      // 5-decimal precision (~1.1 m) absorbs the ULP drift between the
+      // firmware's current-ping and historic-buffer encodings.
       if (
         String(existingProperties.boardID) === String(nextProperties.boardID) &&
-        String(existingProperties.counter) === String(nextProperties.counter)
+        String(existingProperties.counter) === String(nextProperties.counter) &&
+        existingNetwork === nextNetwork
       ) {
         const [existingLon, existingLat] = existingFeature.geometry.coordinates;
         const [nextLon, nextLat] = nextFeature.geometry.coordinates;
         const sameGps =
-          existingLon.toFixed(6) === nextLon.toFixed(6) && existingLat.toFixed(6) === nextLat.toFixed(6);
+          existingLon.toFixed(5) === nextLon.toFixed(5) &&
+          existingLat.toFixed(5) === nextLat.toFixed(5);
 
         if (sameGps) {
           if (existingProperties.rssi === -1 && nextProperties.rssi !== -1) {
@@ -211,6 +233,10 @@ function updateMasterWithIncrementalBonus(
           }
           break;
         }
+        // Counter matches but GPS doesn't – this is a post-reboot ping (or
+        // another board at a different location with the same counter).
+        // Keep searching; do NOT break. If no full match is found, the ping
+        // will be correctly added as a new feature.
       }
 
       const existingTime = parseTimestamp(existingProperties.time);
@@ -246,7 +272,10 @@ function updateMasterWithIncrementalBonus(
 
 /**
  * Returns the timestamp (ms) of a ping if it already exists in the master
- * collection (matched by boardID + counter + exact GPS), or null otherwise.
+ * collection under the full identity key:
+ *   (boardID, counter, network, lat@5dec, lon@5dec).
+ * Counter alone is not unique (resets on board reboot), so GPS must be part
+ * of the match. 5-decimal precision absorbs firmware encoding drift.
  */
 function getPingTimeFromMaster(
   masterFeatures: PingFeature[],
@@ -254,17 +283,20 @@ function getPingTimeFromMaster(
   counter: number,
   longitude: number,
   latitude: number,
+  network: "ttn" | "chirpstack",
 ): number | null {
   for (let index = masterFeatures.length - 1; index >= 0; index -= 1) {
     const existing = masterFeatures[index];
     const ep = existing.properties;
+    const existingNetwork = ep.network === "chirpstack" ? "chirpstack" : "ttn";
     const [eLon, eLat] = existing.geometry.coordinates;
 
     if (
       String(ep.boardID) === String(boardID) &&
       Number(ep.counter) === Number(counter) &&
-      eLon.toFixed(6) === longitude.toFixed(6) &&
-      eLat.toFixed(6) === latitude.toFixed(6)
+      existingNetwork === network &&
+      eLon.toFixed(5) === longitude.toFixed(5) &&
+      eLat.toFixed(5) === latitude.toFixed(5)
     ) {
       return parseTimestamp(ep.time);
     }
@@ -454,22 +486,26 @@ function parseLogToFeatures(
             continue;
           }
 
-          // If already in DB: use its timestamp as new anchor, do not add
-          const existingTime = getPingTimeFromMaster(masterFeatures, boardID, counter, lon, lat);
+          // If already in DB (full 5-key match): use its timestamp as new
+          // anchor, do not add. If only (board,counter,network) matches but
+          // GPS doesn't, it's a post-reboot ping and WILL be added below.
+          const existingTime = getPingTimeFromMaster(masterFeatures, boardID, counter, lon, lat, "ttn");
           if (existingTime !== null) {
             anchor = existingTime;
             funklochOffset = 0;
             continue;
           }
 
-          // Skip if already queued in this batch
+          // Skip if already queued in this batch – full 5-key identity match.
           const alreadyInBatch = features.some((f) => {
             const [fLon, fLat] = f.geometry.coordinates;
+            const fNetwork = f.properties.network === "chirpstack" ? "chirpstack" : "ttn";
             return (
               String(f.properties.boardID) === String(boardID) &&
               Number(f.properties.counter) === Number(counter) &&
-              fLon.toFixed(6) === lon.toFixed(6) &&
-              fLat.toFixed(6) === lat.toFixed(6)
+              fNetwork === "ttn" &&
+              fLon.toFixed(5) === lon.toFixed(5) &&
+              fLat.toFixed(5) === lat.toFixed(5)
             );
           });
 
@@ -518,7 +554,8 @@ export async function getPingSummary(): Promise<PingSummary> {
   return summarizeCollection(collection);
 }
 
-export async function runRemoteUpdate(): Promise<UpdateResult> {
+export function runRemoteUpdate(): Promise<UpdateResult> {
+  return withCollectionLock(async () => {
   const collection = await loadFeatureCollection();
   const now = Date.now();
 
@@ -591,17 +628,20 @@ export async function runRemoteUpdate(): Promise<UpdateResult> {
     updated,
     total: collection.features.filter((feature) => isValidCoordinate(feature.geometry.coordinates)).length,
   };
+  });
 }
 
-export async function uploadManualPings(features: PingFeature[]): Promise<{ added: number; updated: number }> {
-  const collection = await loadFeatureCollection();
-  const { added, updated } = updateMasterWithIncrementalBonus(features, collection);
+export function uploadManualPings(features: PingFeature[]): Promise<{ added: number; updated: number }> {
+  return withCollectionLock(async () => {
+    const collection = await loadFeatureCollection();
+    const { added, updated } = updateMasterWithIncrementalBonus(features, collection);
 
-  if (added > 0 || updated > 0) {
-    await saveFeatureCollection(collection);
-  }
+    if (added > 0 || updated > 0) {
+      await saveFeatureCollection(collection);
+    }
 
-  return { added, updated };
+    return { added, updated };
+  });
 }
 
 export const releaseTimestamp = process.env.RELEASE_TIMESTAMP ? new Date(process.env.RELEASE_TIMESTAMP) : null;
