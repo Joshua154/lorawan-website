@@ -989,6 +989,63 @@ label {
   }
 }
 
+/* ── Mobile time-filter dropdown ─────────────────────────────────────────── */
+
+.timeline-mobile-filter {
+  position: relative;
+  display: none; /* hidden on desktop, shown on mobile via media query below */
+}
+
+.timeline-mobile-filter-btn {
+  white-space: nowrap;
+}
+
+.timeline-mobile-dropdown {
+  position: absolute;
+  bottom: calc(100% + 0.5rem);
+  right: 0;
+  min-width: 9rem;
+  background: var(--surface-strong, var(--surface));
+  border: 1px solid var(--border);
+  border-radius: 0.85rem;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+  z-index: 30;
+}
+
+.timeline-mobile-dropdown-item {
+  display: block;
+  width: 100%;
+  padding: 0.75rem 1.1rem;
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: 0;
+  cursor: pointer;
+  color: var(--text, var(--fg));
+  font-size: 0.95rem;
+  transition: background 120ms ease;
+}
+
+.timeline-mobile-dropdown-item + .timeline-mobile-dropdown-item {
+  border-top: 1px solid var(--border);
+}
+
+.timeline-mobile-dropdown-item:hover {
+  background: var(--surface);
+}
+
+.timeline-mobile-dropdown-item.active {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+@media (max-width: 767px) {
+  .timeline-mobile-filter {
+    display: flex;
+  }
+}
+
 .range-shell {
   position: relative;
   margin-top: 1rem;
@@ -1302,8 +1359,19 @@ label {
   }
 
   .timeline-button {
-    flex: 1;
+    flex: 1 1 0;
     max-width: 10rem;
+    min-height: 3rem;
+  }
+
+  /* The mobile filter wrapper stretches like the other buttons */
+  .timeline-mobile-filter {
+    flex: 1 1 0;
+    max-width: 10rem;
+  }
+
+  .timeline-mobile-filter-btn {
+    flex: 1;
     min-height: 3rem;
   }
 }

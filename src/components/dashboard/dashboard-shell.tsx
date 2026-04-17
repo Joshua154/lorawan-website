@@ -356,8 +356,15 @@ export function DashboardShell({ viewer, releaseMillisecondsRemaining }: Dashboa
   const applyTimeFilter = (filter: TimeFilter | null) => {
     setActiveTimeFilter(filter);
     setIsPlaying(false);
-    if (!filter) return;
-    const windowMs = filter === "1h" ? 3_600_000 : filter === "24h" ? 86_400_000 : 604_800_000;
+    if (!filter) {
+      setRange({ start: 0, end: Math.max(networkSortedFeatures.length - 1, 0) });
+      return;
+    }
+    const windowMs =
+      filter === "1h"  ? 3_600_000 :
+      filter === "24h" ? 86_400_000 :
+      filter === "7d"  ? 604_800_000 :
+      2_592_000_000; // 30d
     const cutoff = Date.now() - windowMs;
     const firstIndex = networkSortedFeatures.findIndex((f) => Date.parse(f.properties.time) >= cutoff);
     const startIndex = firstIndex === -1 ? networkSortedFeatures.length - 1 : firstIndex;
