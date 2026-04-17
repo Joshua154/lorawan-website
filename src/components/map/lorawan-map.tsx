@@ -274,7 +274,10 @@ export function LoraWanMap({
           <div style="text-align:center;font-family:system-ui,sans-serif;line-height:1.45;">
             <strong>${t("map.hexagon.title")}</strong><br />
             <hr style="margin:6px 0;border:0;border-top:1px solid #e5e7eb;" />
-            ${t("map.hexagon.pointAvg", { avg: hexagon.avg })}<br />
+            ${hexagon.avg === -130
+              ? `<em>${t("dashboard.quality.categories.deadzone")}</em>`
+              : t("map.hexagon.pointAvg", { avg: hexagon.avg })
+            }<br />
           </div>
         `);
             // ${t("map.hexagon.restricted")}
@@ -370,6 +373,12 @@ export function LoraWanMap({
           ]);
         }
 
+        const realAvg = Math.round(realRssiSum / bin.points.length);
+        const effectiveAvg = Math.round(effectiveRssiSum / bin.points.length);
+        const deadzoneLabel = t("dashboard.quality.categories.deadzone");
+        const realAvgLabel = realAvg === -130 ? `<em>${deadzoneLabel}</em>` : `${realAvg} dBm`;
+        const effectiveAvgLabel = effectiveAvg === -130 ? `<em>${deadzoneLabel}</em>` : `${effectiveAvg} dBm`;
+
         const polygon = L.polygon(corners, {
           fillColor,
           fillOpacity: 0.78,
@@ -379,8 +388,8 @@ export function LoraWanMap({
           <div style="text-align:center;font-family:system-ui,sans-serif;line-height:1.45;">
             <strong>${t("map.hexagon.title")}</strong><br />
             <hr style="margin:6px 0;border:0;border-top:1px solid #e5e7eb;" />
-            ${t("map.hexagon.realAverage")} <strong>${Math.round(realRssiSum / bin.points.length)} dBm</strong><br />
-            ${isStabilized ? `${t("map.hexagon.effectiveAverage")} <strong>${Math.round(effectiveRssiSum / bin.points.length)} dBm</strong><br />` : ""}
+            ${t("map.hexagon.realAverage")} <strong>${realAvgLabel}</strong><br />
+            ${isStabilized ? `${t("map.hexagon.effectiveAverage")} <strong>${effectiveAvgLabel}</strong><br />` : ""}
             ${t("map.hexagon.pointCount", { count: bin.points.length })}
           </div>
         `);
