@@ -332,11 +332,19 @@ export function DashboardShell({ viewer, releaseMillisecondsRemaining }: Dashboa
     });
   };
 
+  const selectAllBoards = (selectAll: boolean) => {
+    setSelectedBoards(selectAll ? null : []);
+  };
+
   const toggleGateway = (gateway: string) => {
     setSelectedGateways((previous) => {
       const currentSelection = previous ?? gatewayOptions;
       return toggleStringSelection(currentSelection, gateway);
     });
+  };
+
+  const selectAllGateways = (selectAll: boolean) => {
+    setSelectedGateways(selectAll ? null : []);
   };
 
   const toggleFollowBoard = (boardId: string) => {
@@ -524,8 +532,10 @@ export function DashboardShell({ viewer, releaseMillisecondsRemaining }: Dashboa
         onModeChange={setMode}
         onShowBonusInfo={() => setBonusInfoOpen(true)}
         onToggleBoard={toggleBoard}
+        onSelectAllBoards={selectAllBoards}
         onToggleCategory={toggleSignalCategory}
         onToggleGateway={toggleGateway}
+        onSelectAllGateways={selectAllGateways}
         selectedNetwork={selectedNetwork}
         onSelectNetwork={selectNetwork}
         onToggleMenu={() => setMenuOpen((currentValue) => !currentValue)}

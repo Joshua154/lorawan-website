@@ -51,6 +51,8 @@ type ControlPanelProps = {
   onSelectNetwork: (value: PingNetwork) => void;
   onToggleBoard: (value: string) => void;
   onToggleGateway: (value: string) => void;
+  onSelectAllBoards: (selectAll: boolean) => void;
+  onSelectAllGateways: (selectAll: boolean) => void;
   onFollowBoard: (value: string) => void;
   handleLogout: () => Promise<void>;
 };
@@ -110,6 +112,8 @@ export function ControlPanel({
   onSelectNetwork,
   onToggleBoard,
   onToggleGateway,
+  onSelectAllBoards,
+  onSelectAllGateways,
   onFollowBoard,
   handleLogout,
   isAdmin,
@@ -434,6 +438,19 @@ export function ControlPanel({
             onToggle={() => toggleSection("boards")}
             title={<h2 style={{ margin: 0 }}>{t("dashboard.filters.boardsTitle")}</h2>}
           >
+            {Object.keys(boardCounts).length > 3 ? (() => {
+              const boardKeys = sortNumericStrings(Object.keys(boardCounts));
+              const allSelected = selectedBoards === null || boardKeys.every((id) => selectedBoards.includes(id));
+              return (
+                <button
+                  className="select-all-button"
+                  onClick={() => onSelectAllBoards(!allSelected)}
+                  type="button"
+                >
+                  {allSelected ? t("dashboard.filters.unselectAll") : t("dashboard.filters.selectAll")}
+                </button>
+              );
+            })() : null}
             <div className="filter-list">
               {sortNumericStrings(Object.keys(boardCounts)).map((boardId) => {
                 const following = followedBoardId === boardId;
@@ -467,6 +484,19 @@ export function ControlPanel({
             onToggle={() => toggleSection("gateways")}
             title={<h2 style={{ margin: 0 }}>{t("dashboard.filters.gatewaysTitle")}</h2>}
           >
+            {Object.keys(gatewayCounts).length > 5 ? (() => {
+              const gatewayKeys = Object.keys(gatewayCounts);
+              const allSelected = selectedGateways === null || gatewayKeys.every((gw) => selectedGateways.includes(gw));
+              return (
+                <button
+                  className="select-all-button"
+                  onClick={() => onSelectAllGateways(!allSelected)}
+                  type="button"
+                >
+                  {allSelected ? t("dashboard.filters.unselectAll") : t("dashboard.filters.selectAll")}
+                </button>
+              );
+            })() : null}
             <div className="filter-list gateways">
               {Object.keys(gatewayCounts)
                 .sort((left, right) => left.localeCompare(right))

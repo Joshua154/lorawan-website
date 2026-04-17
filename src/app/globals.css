@@ -300,6 +300,26 @@ label {
   gap: 0.65rem;
 }
 
+.select-all-button {
+  display: block;
+  width: 100%;
+  margin-bottom: 0.5rem;
+  padding: 0.35rem 0.75rem;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  color: var(--accent, var(--fg));
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: center;
+  transition: background 120ms ease;
+}
+
+.select-all-button:hover {
+  background: var(--surface);
+}
+
 .stacked-options label,
 .filter-list label,
 .filter-row {

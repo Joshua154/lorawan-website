@@ -170,6 +170,8 @@
     "dashboard.filters.gatewaysTitle": "Gateways",
     "dashboard.filters.boardLabel": "Board {id} ({count})",
     "dashboard.filters.gatewayLabel": "{gateway} ({count})",
+    "dashboard.filters.selectAll": "Alle auswählen",
+    "dashboard.filters.unselectAll": "Alle abwählen",
     "dashboard.account.title": "Konto",
     "dashboard.account.password.current": "Aktuelles Passwort",
     "dashboard.account.password.new": "Neues Passwort",
